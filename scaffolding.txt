@@ -1,0 +1,90 @@
+study-planner/
+│
+├── README.md
+├── .env.example
+├── docker-compose.yml
+├── Makefile
+│
+├── backend/
+│   ├── app/
+│   │   ├── main.py                # FastAPI entrypoint
+│   │   ├── core/
+│   │   │   ├── config.py           # env, settings
+│   │   │   ├── database.py         # DB connection
+│   │   │   ├── security.py         # JWT, auth
+│   │   │   └── logging.py
+│   │   │
+│   │   ├── agent/                  # 🧠 THE AGENT
+│   │   │   ├── __init__.py
+│   │   │   ├── orchestrator.py     # agent coordinator
+│   │   │   ├── prompts.py          # system prompts
+│   │   │   ├── schemas.py          # input/output JSON schemas
+│   │   │   ├── syllabus_parser.py  # LLM syllabus parsing
+│   │   │   ├── task_decomposer.py  # syllabus → tasks
+│   │   │   ├── pomodoro.py         # rule-based splitting
+│   │   │   ├── scheduler.py        # calendar allocation
+│   │   │   ├── rescheduler.py      # adaptive replanning
+│   │   │   ├── flashcards.py       # card generation hooks
+│   │   │   └── productivity.py     # streaks, summaries
+│   │   │
+│   │   ├── models/                 # DB models
+│   │   │   ├── user.py
+│   │   │   ├── course.py
+│   │   │   ├── task.py
+│   │   │   ├── pomodoro.py
+│   │   │   ├── calendar.py
+│   │   │   ├── flashcard.py
+│   │   │   └── progress.py
+│   │   │
+│   │   ├── api/                    # REST endpoints
+│   │   │   ├── deps.py
+│   │   │   ├── auth.py
+│   │   │   ├── agent.py            # trigger agent runs
+│   │   │   ├── calendar.py
+│   │   │   ├── pomodoro.py
+│   │   │   ├── flashcards.py
+│   │   │   └── progress.py
+│   │   │
+│   │   ├── services/               # non-agent business logic
+│   │   │   ├── notifications.py
+│   │   │   ├── analytics.py
+│   │   │   └── calendar_sync.py
+│   │   │
+│   │   └── workers/                # background jobs
+│   │       ├── reschedule_job.py
+│   │       └── summary_job.py
+│   │
+│   ├── alembic/
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── app/
+│   │   ├── screens/
+│   │   │   ├── Dashboard.tsx
+│   │   │   ├── Tasks.tsx
+│   │   │   ├── Calendar.tsx
+│   │   │   ├── Pomodoro.tsx
+│   │   │   ├── Flashcards.tsx
+│   │   │   └── Review.tsx
+│   │   │
+│   │   ├── components/
+│   │   │   ├── TaskCard.tsx
+│   │   │   ├── PomodoroTimer.tsx
+│   │   │   ├── ProgressBar.tsx
+│   │   │   └── StreakBadge.tsx
+│   │   │
+│   │   ├── api/
+│   │   │   └── client.ts
+│   │   │
+│   │   ├── store/
+│   │   │   └── useStudyStore.ts
+│   │   │
+│   │   └── utils/
+│   │       └── time.ts
+│   │
+│   └── package.json
+│
+└── docs/
+    ├── architecture.md
+    ├── agent.md
+    └── api.md
