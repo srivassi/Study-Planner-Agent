@@ -4,15 +4,25 @@ import { useState, useEffect } from 'react';
 
 export default function Dashboard() {
   const [modules] = useState([
-    { id: 1, name: 'Data Structures', date: '2 days ago' },
-    { id: 2, name: 'Algorithms', date: '5 days ago' },
-    { id: 3, name: 'Database Systems', date: '1 week ago' },
-    { id: 4, name: 'Operating Systems', date: '2 weeks ago' },
+    { id: 1, name: 'Data Structures', icon: '📚', cover: 'https://images.unsplash.com/photo-1509228468518-180dd4864904?w=1200&h=280&fit=crop' },
+    { id: 2, name: 'Algorithms', icon: '🧮', cover: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=280&fit=crop' },
+    { id: 3, name: 'Database Systems', icon: '💾', cover: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1200&h=280&fit=crop' },
+    { id: 4, name: 'Operating Systems', icon: '⚙️', cover: 'https://images.unsplash.com/photo-1511884642898-4c92249e20b6?w=1200&h=280&fit=crop' },
   ]);
 
   const [selectedModule, setSelectedModule] = useState(null);
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
+  const [user, setUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [favorites, setFavorites] = useState([]);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
 
   useEffect(() => {
     if (!isRunning) return;
@@ -25,294 +35,330 @@ export default function Dashboard() {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
 
+  const handleAuth = (name) => {
+    setUser({ name });
+    setShowAuthModal(false);
+  };
+
+  const toggleFavorite = (id) => {
+    setFavorites(prev => 
+      prev.includes(id) ? prev.filter(fid => fid !== id) : [...prev, id]
+    );
+  };
+
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-      {/* Sidebar */}
-      <div className="flex w-64 flex-col border-r border-gray-200 bg-white p-4 shadow-xl">
-        <div className="mb-6 flex-1">
-          <h2 className="mb-4 text-sm font-semibold text-gray-500">STUDY HISTORY</h2>
+    <div className="flex h-screen" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, 'Apple Color Emoji', Arial, sans-serif" }}>
+      {/* Fixed Left Sidebar */}
+      <div className="w-60 flex-shrink-0 overflow-y-auto" style={{ backgroundColor: '#FBFBFA', borderRight: '1px solid #EDEDED' }}>
+        <div className="p-3">
+          <div className="mb-6 px-2 py-3 flex items-center gap-2 cursor-pointer" onClick={() => setSelectedModule(null)}>
+            <div className="text-xl">🎓</div>
+            <div className="text-sm font-semibold" style={{ color: '#37352F' }}>Study Planner</div>
+          </div>
+
           <div className="space-y-1">
             {modules.map((module) => (
               <div
                 key={module.id}
-                onClick={() => setSelectedModule(module)}
-                className={`cursor-pointer rounded-lg px-3 py-2 text-sm shadow-md transition ${
-                  selectedModule?.id === module.id
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/30'
-                    : 'bg-gradient-to-r from-gray-100 to-gray-50 text-gray-700 hover:from-gray-200 hover:to-gray-100 hover:shadow-lg'
-                }`}
+                className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer transition-colors group"
+                style={{
+                  backgroundColor: selectedModule?.id === module.id ? '#EFEFED' : 'transparent',
+                  color: '#37352F',
+                  borderRadius: '4px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFEFED'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedModule?.id === module.id ? '#EFEFED' : 'transparent'}
               >
-                <div className="font-medium">📚 {module.name}</div>
-                <div className={`text-xs ${selectedModule?.id === module.id ? 'text-blue-100' : 'text-gray-500'}`}>{module.date}</div>
+                <span onClick={() => setSelectedModule(module)}>{module.icon}</span>
+                <span onClick={() => setSelectedModule(module)} className="flex-1">{module.name}</span>
+                <span 
+                  onClick={(e) => { e.stopPropagation(); toggleFavorite(module.id); }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ cursor: 'pointer' }}
+                >
+                  {favorites.includes(module.id) ? '⭐' : '☆'}
+                </span>
               </div>
             ))}
           </div>
-        </div>
-        
-        <button 
-          onClick={() => setSelectedModule(null)}
-          className="mb-4 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-md transition hover:bg-gray-50 hover:shadow-lg"
-        >
-          ← Back to Overview
-        </button>
 
-        {/* Pomodoro Timer */}
-        <div className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-red-50 p-4 shadow-xl">
-          <div className="mb-3 text-center text-xs font-semibold text-orange-600">FOCUS SESSION</div>
-          
-          <div className="mb-3 flex justify-center">
-            <div className="text-5xl drop-shadow-lg">⏳</div>
-          </div>
-          
-          <div className="mb-4 text-center">
-            <div className="text-3xl font-bold text-gray-800 drop-shadow-sm">
-              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+          {/* Pomodoro Timer */}
+          <div className="mt-6 p-3" style={{ border: '1px solid #EDEDED', borderRadius: '4px', backgroundColor: '#FFFFFF' }}>
+            <div className="text-xs font-semibold mb-3" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>FOCUS SESSION</div>
+            <div className="text-center mb-3">
+              <div className="text-2xl mb-2">⏳</div>
+              <div className="text-xl font-semibold" style={{ color: '#37352F' }}>
+                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+              </div>
             </div>
-            <div className="mt-1 text-xs text-orange-600">25 min session</div>
-          </div>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsRunning(!isRunning)}
-              className="flex-1 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:from-red-600 hover:to-orange-600 hover:shadow-xl"
-            >
-              {isRunning ? 'Pause' : 'Start'}
-            </button>
-            <button
-              onClick={() => { setTimeLeft(25 * 60); setIsRunning(false); }}
-              className="rounded-lg border border-orange-300 bg-white px-3 py-2 text-sm text-orange-600 transition hover:bg-orange-50"
-            >
-              Reset
-            </button>
-          </div>
-          
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-orange-100">
-            <div
-              className="h-full bg-gradient-to-r from-red-500 to-orange-500 shadow-lg transition-all duration-1000"
-              style={{ width: `${((25 * 60 - timeLeft) / (25 * 60)) * 100}%` }}
-            ></div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsRunning(!isRunning)}
+                className="flex-1 px-3 py-1.5 text-sm font-medium transition-colors"
+                style={{ border: '1px solid #D3D1CB', borderRadius: '4px', backgroundColor: '#FFFFFF', color: '#37352F' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFEFED'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+              >
+                {isRunning ? 'Pause' : 'Start'}
+              </button>
+              <button
+                onClick={() => { setTimeLeft(25 * 60); setIsRunning(false); }}
+                className="px-3 py-1.5 text-sm transition-colors"
+                style={{ border: '1px solid #D3D1CB', borderRadius: '4px', backgroundColor: '#FFFFFF', color: 'rgba(55, 53, 47, 0.65)' }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFEFED'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-4xl p-12">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#FFFFFF' }}>
+        {/* Top Right Auth Button */}
+        <div className="absolute top-4 right-6">
+          {user ? (
+            <div className="px-3 py-1.5 text-sm" style={{ color: '#37352F' }}>
+              {user.name}'s Planner
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="px-3 py-1.5 text-sm font-medium transition-colors"
+              style={{ border: '1px solid #D3D1CB', borderRadius: '4px', backgroundColor: '#FFFFFF', color: '#37352F' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFEFED'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+            >
+              Sign In / Sign Up
+            </button>
+          )}
+        </div>
+
+        <div className="py-12" style={{ maxWidth: '100%' }}>
+          {/* Breadcrumb */}
+          <div className="mb-4 text-sm" style={{ color: 'rgba(55, 53, 47, 0.65)', paddingLeft: '12px' }}>
+            Dashboard {selectedModule && ` / ${selectedModule.name}`}
+          </div>
+
+          {/* Page Header with Cover */}
+          <div className="mb-8 relative" style={{ height: '280px' }}>
+            <img 
+              src={selectedModule?.cover || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=280&fit=crop'} 
+              alt="Cover" 
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute bottom-0 left-0 right-0 px-24 py-6" style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.7))' }}>
+              <div className="flex items-center gap-3">
+                <div className="text-5xl">{selectedModule?.icon || '✨'}</div>
+                <h1 style={{ fontSize: '40px', fontWeight: 700, lineHeight: 1.2, color: '#FFFFFF' }}>
+                  {selectedModule?.name || `${getGreeting()}${user ? ', ' + user.name : ''}`}
+                </h1>
+              </div>
+              {!selectedModule && (
+                <div className="flex items-center gap-3 text-sm mt-2" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                  <span>🔥 5 day streak</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           {!selectedModule ? (
-            <>
-              <div className="mb-8">
-                <h1 className="mb-2 bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 bg-clip-text text-4xl font-bold text-transparent drop-shadow-sm">Welcome back</h1>
-                <p className="text-gray-600">🔥 Keep your streak going! 5 days strong</p>
+            <div className="px-24">
+              {/* Stats Grid */}
+              <div className="grid grid-cols-4 gap-4 mb-8">
+                {[
+                  { icon: '🎯', value: '12', label: 'Tasks Completed', sublabel: 'This week' },
+                  { icon: '⏱️', value: '48h', label: 'Focus Time', sublabel: 'Last 30 days' },
+                  { icon: '🔥', value: '5', label: 'Day Streak', sublabel: 'Current' },
+                  { icon: '🏆', value: '8', label: 'Badges Earned', sublabel: 'All time' }
+                ].map((stat, i) => (
+                  <div key={i} className="p-4" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                    <div className="text-2xl mb-2">{stat.icon}</div>
+                    <div className="text-xl font-semibold" style={{ color: '#37352F' }}>{stat.value}</div>
+                    <div className="text-xs" style={{ color: '#37352F' }}>{stat.label}</div>
+                    <div className="text-xs" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>{stat.sublabel}</div>
+                  </div>
+                ))}
               </div>
 
-              {/* Productivity & Progress Stats */}
-              <div className="mb-8 grid grid-cols-4 gap-4">
-                <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-6 shadow-xl">
-                  <div className="mb-2 text-3xl">🎯</div>
-                  <div className="text-2xl font-bold text-gray-800">12</div>
-                  <div className="text-xs text-gray-600">Tasks Completed</div>
-                </div>
-                <div className="rounded-xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 p-6 shadow-xl">
-                  <div className="mb-2 text-3xl">⏱️</div>
-                  <div className="text-2xl font-bold text-gray-800">48h</div>
-                  <div className="text-xs text-gray-600">Focus Time</div>
-                </div>
-                <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6 shadow-xl">
-                  <div className="mb-2 text-3xl">🔥</div>
-                  <div className="text-2xl font-bold text-gray-800">5</div>
-                  <div className="text-xs text-gray-600">Day Streak</div>
-                </div>
-                <div className="rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-6 shadow-xl">
-                  <div className="mb-2 text-3xl">🏆</div>
-                  <div className="text-2xl font-bold text-gray-800">8</div>
-                  <div className="text-xs text-gray-600">Badges Earned</div>
-                </div>
-              </div>
-
-              {/* Weekly Progress Overview */}
-              <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-                <h2 className="mb-4 text-lg font-semibold text-gray-800">📈 Weekly Progress Overview</h2>
-                <div className="mb-4 flex items-end justify-between gap-2">
+              {/* Weekly Progress */}
+              <div className="mb-8 p-6" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                <h2 className="mb-4" style={{ fontSize: '30px', fontWeight: 600, color: '#37352F' }}>Weekly Progress</h2>
+                <div className="flex items-end justify-between gap-2 mb-4" style={{ height: '120px' }}>
                   {[40, 65, 55, 80, 70, 45, 60].map((height, idx) => (
-                    <div key={idx} className="flex flex-1 flex-col items-center gap-2">
-                      <div className="w-full rounded-t-lg bg-gradient-to-t from-blue-500 to-cyan-400 shadow-lg" style={{ height: `${height}px` }}></div>
-                      <div className="text-xs text-gray-500">{['M', 'T', 'W', 'T', 'F', 'S', 'S'][idx]}</div>
+                    <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+                      <div className="w-full" style={{ height: `${height}px`, backgroundColor: '#37352F', borderRadius: '2px' }}></div>
+                      <div className="text-xs" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>
+                        {['M', 'T', 'W', 'T', 'F', 'S', 'S'][idx]}
+                      </div>
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center justify-between text-sm">
-                  <div className="text-gray-600">This week: <span className="font-semibold text-gray-800">18 Pomodoros</span></div>
-                  <div className="text-green-600">↑ 12% from last week</div>
+                <div className="text-sm" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>
+                  18 Pomodoros this week
                 </div>
               </div>
 
-              {/* Smart Study Calendar */}
-              <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-800">📅 Smart Study Plan & Calendar</h2>
-                  <button className="text-sm text-blue-600 transition hover:text-blue-700">View All →</button>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <div className="flex gap-3 pb-2">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
-                      <div
-                        key={day}
-                        className="min-w-[140px] cursor-pointer rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 shadow-lg transition hover:border-gray-300 hover:shadow-xl"
-                      >
-                        <div className="mb-2 text-xs font-semibold text-gray-500">{day}</div>
-                        <div className="mb-3 text-sm font-bold text-gray-800">Feb {10 + idx}</div>
-                        <div className="space-y-2">
-                          <div className="rounded bg-gradient-to-r from-cyan-100 to-blue-100 px-2 py-1 text-xs text-cyan-700 shadow-md">
-                            9:00 AM - Study
-                          </div>
-                          <div className="rounded bg-gradient-to-r from-green-100 to-emerald-100 px-2 py-1 text-xs text-green-700 shadow-md">
-                            2:00 PM - Review
-                          </div>
+              {/* Calendar */}
+              <div className="mb-8 p-6" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                <h2 className="mb-4" style={{ fontSize: '30px', fontWeight: 600, color: '#37352F' }}>Study Calendar</h2>
+                <div className="flex gap-3 overflow-x-auto">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
+                    <div key={day} className="min-w-[120px] p-3" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                      <div className="text-xs mb-1" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>{day}</div>
+                      <div className="text-sm font-semibold mb-2" style={{ color: '#37352F' }}>Feb {10 + idx}</div>
+                      <div className="space-y-1">
+                        <div className="text-xs px-2 py-1" style={{ backgroundColor: '#EFEFED', borderRadius: '2px', color: '#37352F' }}>
+                          9:00 Study
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-                
-                <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-cyan-500 shadow-lg"></div>
-                    <span>Study Session</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-green-500 shadow-lg"></div>
-                    <span>Review</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-yellow-500 shadow-lg"></div>
-                    <span>Buffer Time</span>
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               {/* Recent Activity */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-                <h2 className="mb-4 text-lg font-semibold text-gray-800">Recent Activity</h2>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl">✅</div>
-                    <div>
-                      <div className="font-medium text-gray-800">Completed Data Structures</div>
-                      <div className="text-sm text-gray-500">2 days ago</div>
+              <div className="p-6" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                <h2 className="mb-4" style={{ fontSize: '30px', fontWeight: 600, color: '#37352F' }}>Recent Activity</h2>
+                <div className="space-y-3">
+                  {[
+                    { icon: '✅', text: 'Completed Data Structures', time: '2 days ago' },
+                    { icon: '📝', text: 'Started Algorithms module', time: '5 days ago' },
+                    { icon: '🎯', text: 'Set new study goal', time: '1 week ago' }
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <div className="text-xl">{item.icon}</div>
+                      <div>
+                        <div className="text-sm" style={{ color: '#37352F' }}>{item.text}</div>
+                        <div className="text-xs" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>{item.time}</div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl">📝</div>
-                    <div>
-                      <div className="font-medium text-gray-800">Started Algorithms module</div>
-                      <div className="text-sm text-gray-500">5 days ago</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl">🎯</div>
-                    <div>
-                      <div className="font-medium text-gray-800">Set new study goal</div>
-                      <div className="text-sm text-gray-500">1 week ago</div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
-            </>
+            </div>
           ) : (
             <>
-              {/* Module Dashboard */}
-              <div className="mb-8">
-                <h1 className="mb-2 bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 bg-clip-text text-4xl font-bold text-transparent drop-shadow-sm">{selectedModule.name}</h1>
-                <p className="text-gray-600">Module progress and insights</p>
-              </div>
-
               {/* Module Stats */}
-              <div className="mb-8 grid grid-cols-3 gap-4">
-                <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-6 shadow-xl">
-                  <div className="mb-2 text-3xl">📖</div>
-                  <div className="text-2xl font-bold text-gray-800">8/12</div>
-                  <div className="text-xs text-gray-600">Topics Completed</div>
-                </div>
-                <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6 shadow-xl">
-                  <div className="mb-2 text-3xl">⏱️</div>
-                  <div className="text-2xl font-bold text-gray-800">12h</div>
-                  <div className="text-xs text-gray-600">Time Spent</div>
-                </div>
-                <div className="rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 p-6 shadow-xl">
-                  <div className="mb-2 text-3xl">✅</div>
-                  <div className="text-2xl font-bold text-gray-800">85%</div>
-                  <div className="text-xs text-gray-600">Completion</div>
-                </div>
+              <div className="grid grid-cols-3 gap-4 mb-8">
+                {[
+                  { icon: '📖', value: '8/12', label: 'Topics' },
+                  { icon: '⏱️', value: '12h', label: 'Time Spent' },
+                  { icon: '✅', value: '85%', label: 'Completion' }
+                ].map((stat, i) => (
+                  <div key={i} className="p-4" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                    <div className="text-2xl mb-2">{stat.icon}</div>
+                    <div className="text-xl font-semibold" style={{ color: '#37352F' }}>{stat.value}</div>
+                    <div className="text-xs" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>{stat.label}</div>
+                  </div>
+                ))}
               </div>
 
-              {/* Module Calendar */}
-              <div className="mb-8 rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-                <h2 className="mb-4 text-lg font-semibold text-gray-800">📅 Study Schedule</h2>
-                <div className="overflow-x-auto">
-                  <div className="flex gap-3 pb-2">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day, idx) => (
-                      <div
-                        key={day}
-                        className="min-w-[140px] cursor-pointer rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 shadow-lg transition hover:shadow-xl"
-                      >
-                        <div className="mb-2 text-xs font-semibold text-gray-500">{day}</div>
-                        <div className="mb-3 text-sm font-bold text-gray-800">Feb {10 + idx}</div>
-                        <div className="space-y-2">
-                          <div className="rounded bg-gradient-to-r from-blue-100 to-cyan-100 px-2 py-1 text-xs text-blue-700 shadow-md">
-                            Topic {idx + 1}
-                          </div>
-                        </div>
+              {/* Flashcards */}
+              <div className="mb-8 p-6 flex items-center justify-between" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                <div>
+                  <h2 className="mb-1" style={{ fontSize: '30px', fontWeight: 600, color: '#37352F' }}>Flashcards</h2>
+                  <div className="text-sm" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>24 cards due for review</div>
+                </div>
+                <button
+                  className="px-4 py-2 text-sm font-medium transition-colors"
+                  style={{ border: '1px solid #D3D1CB', borderRadius: '4px', backgroundColor: '#FFFFFF', color: '#37352F' }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFEFED'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+                >
+                  Review Now
+                </button>
+              </div>
+
+              {/* Activity */}
+              <div className="p-6" style={{ border: '1px solid #EDEDED', borderRadius: '4px' }}>
+                <h2 className="mb-4" style={{ fontSize: '30px', fontWeight: 600, color: '#37352F' }}>Recent Activity</h2>
+                <div className="space-y-3">
+                  {[
+                    { icon: '✅', text: 'Completed Topic 8: Hash Tables', time: '1 day ago' },
+                    { icon: '📝', text: 'Reviewed 15 flashcards', time: '2 days ago' },
+                    { icon: '🎯', text: 'Started Topic 7: Trees', time: '3 days ago' }
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <div className="text-xl">{item.icon}</div>
+                      <div>
+                        <div className="text-sm" style={{ color: '#37352F' }}>{item.text}</div>
+                        <div className="text-xs" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>{item.time}</div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Flashcards Button */}
-              <div className="mb-8 rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6 shadow-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="mb-1 text-lg font-semibold text-gray-800">🎴 Flashcards</h2>
-                    <p className="text-sm text-gray-600">24 cards due for review</p>
-                  </div>
-                  <button className="rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-3 font-semibold text-white shadow-lg shadow-purple-500/30 transition hover:from-purple-600 hover:to-pink-600 hover:shadow-xl">
-                    View Flashcards
-                  </button>
-                </div>
-              </div>
-
-              {/* Module Activity */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-xl">
-                <h2 className="mb-4 text-lg font-semibold text-gray-800">Recent Activity</h2>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl">✅</div>
-                    <div>
-                      <div className="font-medium text-gray-800">Completed Topic 8: Hash Tables</div>
-                      <div className="text-sm text-gray-500">1 day ago</div>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl">📝</div>
-                    <div>
-                      <div className="font-medium text-gray-800">Reviewed 15 flashcards</div>
-                      <div className="text-sm text-gray-500">2 days ago</div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="text-2xl">🎯</div>
-                    <div>
-                      <div className="font-medium text-gray-800">Started Topic 7: Trees</div>
-                      <div className="text-sm text-gray-500">3 days ago</div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </>
           )}
         </div>
       </div>
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowAuthModal(false)}>
+          <div className="w-96 p-6" style={{ backgroundColor: '#FFFFFF', borderRadius: '4px', border: '1px solid #EDEDED' }} onClick={(e) => e.stopPropagation()}>
+            <div className="text-3xl mb-4 text-center">📚</div>
+            <h2 className="mb-6 text-center" style={{ fontSize: '30px', fontWeight: 600, color: '#37352F' }}>Welcome to Study Planner</h2>
+            
+            <input
+              type="email"
+              placeholder="Enter your email"
+              className="w-full mb-3 px-3 py-2 text-sm"
+              style={{ border: '1px solid #EDEDED', borderRadius: '4px', color: '#37352F' }}
+            />
+            <input
+              type="password"
+              placeholder="Enter your password"
+              className="w-full mb-3 px-3 py-2 text-sm"
+              style={{ border: '1px solid #EDEDED', borderRadius: '4px', color: '#37352F' }}
+            />
+            <input
+              type="text"
+              placeholder="Your name"
+              className="w-full mb-4 px-3 py-2 text-sm"
+              style={{ border: '1px solid #EDEDED', borderRadius: '4px', color: '#37352F' }}
+              onKeyDown={(e) => e.key === 'Enter' && e.target.value && handleAuth(e.target.value)}
+            />
+            
+            <button
+              onClick={(e) => {
+                const input = e.target.previousElementSibling;
+                if (input.value) handleAuth(input.value);
+              }}
+              className="w-full px-4 py-2 text-sm font-medium transition-colors mb-4"
+              style={{ border: '1px solid #D3D1CB', borderRadius: '4px', backgroundColor: '#37352F', color: '#FFFFFF' }}
+            >
+              Continue
+            </button>
+            
+            <div className="flex items-center mb-4">
+              <div className="flex-1" style={{ borderTop: '1px solid #EDEDED' }}></div>
+              <span className="px-3 text-xs" style={{ color: 'rgba(55, 53, 47, 0.65)' }}>OR</span>
+              <div className="flex-1" style={{ borderTop: '1px solid #EDEDED' }}></div>
+            </div>
+            
+            <button
+              className="w-full px-4 py-2 text-sm font-medium transition-colors mb-2"
+              style={{ border: '1px solid #EDEDED', borderRadius: '4px', backgroundColor: '#FFFFFF', color: '#37352F' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFEFED'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+            >
+              Continue with Google
+            </button>
+            <button
+              className="w-full px-4 py-2 text-sm font-medium transition-colors"
+              style={{ border: '1px solid #EDEDED', borderRadius: '4px', backgroundColor: '#FFFFFF', color: '#37352F' }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#EFEFED'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFFFFF'}
+            >
+              Continue with Apple
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
