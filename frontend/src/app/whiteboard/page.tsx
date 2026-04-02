@@ -2,9 +2,10 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+
 import { supabase } from '../../lib/supabase'
 import { api } from '../../lib/api'
 
@@ -43,6 +44,14 @@ function newNote(x: number, y: number, highlight?: string): StickyNote {
 }
 
 export default function WhiteboardPage() {
+  return (
+    <Suspense>
+      <WhiteboardInner />
+    </Suspense>
+  )
+}
+
+function WhiteboardInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const courseIdParam = searchParams.get('course')
