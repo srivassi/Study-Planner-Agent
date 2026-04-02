@@ -1,9 +1,15 @@
+import os
+import re
+import json
+import traceback
+from collections import defaultdict
+from datetime import date, datetime, timedelta
+import anthropic as _anthropic
 from fastapi import APIRouter, HTTPException
 from app.core.supabase import get_supabase_client
-from app.agent.scheduler import reschedule_remaining, _parse_date
+from app.agent.scheduler import generate_schedule, reschedule_remaining, _parse_date
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import date, datetime
 
 router = APIRouter(prefix="/study")
 
@@ -26,6 +32,13 @@ class RescheduleRequest(BaseModel):
     exam_date: str          # ISO date
     daily_study_hours: int
     pomodoro_minutes: int = 25
+
+
+class FullRescheduleRequest(BaseModel):
+    user_id: str
+    feedback: Optional[str] = None
+    interleave_courses: bool = True          # cover all modules each day
+    sessions_per_day_override: Optional[int] = None   # override profile value
 
 
 # ─── Pomodoro ───────────────────────────────────────────────
@@ -170,7 +183,6 @@ def get_stats(user_id: str):
             break
 
     # Weekly pomodoros (last 7 days)
-    from datetime import timedelta
     weekly = []
     for i in range(6, -1, -1):
         day = (date.today() - timedelta(days=i)).isoformat()
@@ -216,3 +228,137 @@ def reschedule(body: RescheduleRequest):
         }).eq("id", t["id"]).execute()
 
     return {"rescheduled_count": len(updated), "tasks": updated}
+
+
+@router.post("/full-reschedule")
+def full_reschedule(body: FullRescheduleRequest):
+    """Replans ALL remaining tasks across ALL courses in a shared daily pool."""
+    supabase = get_supabase_client()
+    disruptions = supabase.table("disruptions").select("*").eq("user_id", body.user_id).execute().data or []
+    profile_rows = supabase.table("user_profiles").select("*").eq("id", body.user_id).limit(1).execute().data
+    if not profile_rows:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    profile = profile_rows[0]
+    daily_hours = profile.get("daily_study_hours", 4)
+    pomodoro_minutes = profile.get("pomodoro_work_minutes", 25)
+    sessions_per_day = body.sessions_per_day_override or profile.get("sessions_per_day")
+    session_duration_minutes = profile.get("session_duration_minutes")
+
+    courses = supabase.table("courses").select("*").eq("user_id", body.user_id).execute().data or []
+    course_map = {c["id"]: c for c in courses}
+
+    # Collect ALL remaining tasks across courses, tagging each with its exam_date
+    all_remaining = []
+    for course in courses:
+        if not course.get("exam_date"):
+            continue
+        tasks = supabase.table("tasks").select("*").eq("course_id", course["id"]).execute().data or []
+        for t in tasks:
+            if t.get("status") not in ("done", "completed"):
+                t["_exam_date"] = course["exam_date"]
+                all_remaining.append(t)
+
+    if not all_remaining:
+        return {"updated": 0}
+
+    # Sort tasks and optionally interleave across courses so each day covers all modules.
+    priority_order = {"high": 0, "medium": 1, "low": 2}
+    by_course: dict = defaultdict(list)
+    for t in all_remaining:
+        by_course[t["course_id"]].append(t)
+    # Sort each course's tasks by priority
+    for lst in by_course.values():
+        lst.sort(key=lambda t: priority_order.get(t.get("priority", "medium"), 1))
+
+    if body.interleave_courses:
+        # Round-robin across courses ordered by soonest exam
+        sorted_courses = sorted(
+            by_course.keys(),
+            key=lambda cid: course_map.get(cid, {}).get("exam_date", "9999-99-99")
+        )
+        interleaved = []
+        course_lists = [by_course[cid] for cid in sorted_courses]
+        max_len = max((len(lst) for lst in course_lists), default=0)
+        for i in range(max_len):
+            for lst in course_lists:
+                if i < len(lst):
+                    interleaved.append(lst[i])
+        all_remaining = interleaved
+    else:
+        # Sequential: finish one course before starting the next (soonest exam first)
+        sorted_courses = sorted(
+            by_course.keys(),
+            key=lambda cid: course_map.get(cid, {}).get("exam_date", "9999-99-99")
+        )
+        all_remaining = [t for cid in sorted_courses for t in by_course[cid]]
+
+    # Claude interprets feedback and returns scheduling directives + task order
+    start_date = date.today()
+    if body.feedback and body.feedback.strip():
+        try:
+            client = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            task_summary = "\n".join(
+                f"- [{t.get('priority','medium')}] {t['title']} ({t['estimated_minutes']}m, exam {t['_exam_date']})"
+                for t in all_remaining[:80]  # cap to avoid token limits
+            )
+            prompt = f"""You are a study schedule assistant. Today's date: {date.today().isoformat()}. Current schedule settings:
+- Sessions per day: {sessions_per_day or 'not set'}
+- Session duration: {session_duration_minutes or 'not set'} minutes
+- Pomodoro duration: {pomodoro_minutes} minutes
+- Tasks per day (calculated): {(sessions_per_day or 1) * max(1, (session_duration_minutes or pomodoro_minutes) // pomodoro_minutes)}
+
+User feedback: "{body.feedback}"
+
+Tasks to schedule ({len(all_remaining)} total, showing first 80):
+{task_summary}
+
+Based on the feedback, return a JSON object with these fields:
+- "sessions_per_day": integer or null (only set if user wants to change blocks per day)
+- "session_duration_minutes": integer or null (only set if user wants to change session length)
+- "start_date": ISO date string or null (only set if user wants scheduling to start from a specific date, e.g. "2026-04-03")
+- "task_order": array of task titles in preferred order (reorder all {len(all_remaining)} tasks)
+
+Return raw JSON only, no explanation. If feedback doesn't clearly request a change to a field, set it to null."""
+
+            msg = client.messages.create(model="claude-opus-4-6", max_tokens=8000,
+                                          messages=[{"role": "user", "content": prompt}])
+            raw = msg.content[0].text.strip()
+            obj_match = re.search(r'\{[\s\S]*\}', raw)
+            if obj_match:
+                directives = json.loads(obj_match.group(0))
+                if directives.get("sessions_per_day"):
+                    sessions_per_day = int(directives["sessions_per_day"])
+                if directives.get("session_duration_minutes"):
+                    session_duration_minutes = int(directives["session_duration_minutes"])
+                if directives.get("start_date"):
+                    start_date = _parse_date(directives["start_date"])
+                ordered_titles = directives.get("task_order", [])
+                if ordered_titles:
+                    title_index = {title: i for i, title in enumerate(ordered_titles)}
+                    all_remaining.sort(key=lambda t: title_index.get(t["title"], 999))
+        except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Claude feedback error: {e}")
+
+    # Use the earliest exam date as the scheduling horizon
+    earliest_exam = min(_parse_date(c["exam_date"]) for c in courses if c.get("exam_date"))
+
+    scheduled = generate_schedule(
+        tasks=all_remaining,
+        exam_date=earliest_exam,
+        daily_study_hours=daily_hours,
+        pomodoro_minutes=pomodoro_minutes,
+        disruptions=disruptions,
+        start_date=start_date,
+        sessions_per_day=sessions_per_day,
+        session_duration_minutes=session_duration_minutes,
+        preserve_order=True,
+    )
+
+    for t in scheduled:
+        supabase.table("tasks").update({
+            "scheduled_date": t.get("scheduled_date"),
+            "order_index": t.get("order_index", 0),
+        }).eq("id", t["id"]).execute()
+
+    return {"updated": len(scheduled)}

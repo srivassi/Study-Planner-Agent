@@ -16,6 +16,7 @@ export const api = {
   // ── Onboarding ──────────────────────────────────────
   completeOnboarding: (data) => req('/onboarding/complete', { method: 'POST', body: JSON.stringify(data) }),
   getProfile: (userId) => req(`/onboarding/profile/${userId}`),
+  updateProfile: (userId, data) => req(`/onboarding/profile/${userId}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // ── Courses ──────────────────────────────────────────
   createCourse: (data) => req('/onboarding/courses', { method: 'POST', body: JSON.stringify(data) }),
@@ -44,6 +45,7 @@ export const api = {
   completePomodoro: (sessionId, notes) => req('/study/pomodoro/complete', { method: 'POST', body: JSON.stringify({ session_id: sessionId, notes }) }),
   getSessions: (userId) => req(`/study/pomodoro/sessions/${userId}`),
   reschedule: (data) => req('/study/reschedule', { method: 'POST', body: JSON.stringify(data) }),
+  fullReschedule: (userId, feedback, options = {}) => req('/study/full-reschedule', { method: 'POST', body: JSON.stringify({ user_id: userId, feedback, ...options }) }),
 
   // ── Whiteboard ────────────────────────────────────────
   getWhiteboard: (courseId, userId) => req(`/whiteboard/${courseId}?user_id=${userId}`),

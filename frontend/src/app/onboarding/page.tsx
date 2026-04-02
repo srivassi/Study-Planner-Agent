@@ -88,6 +88,8 @@ export default function Onboarding() {
       await api.completeOnboarding({
         user_id: userId,
         daily_study_hours: dailyHours,
+        sessions_per_day: sessionsPerDay,
+        session_duration_minutes: sessionDuration * 60,
         pomodoro_preset: pomodoroPreset,
         custom_work_minutes: customWork,
         custom_break_minutes: customBreak,

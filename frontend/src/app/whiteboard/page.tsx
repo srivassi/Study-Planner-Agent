@@ -214,21 +214,28 @@ export default function WhiteboardPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-gray-900 text-white">
+    <div className="flex h-screen flex-col" style={{ fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", backgroundColor: '#FFFFFF', color: '#37352F' }}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-5 py-3">
+      <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid #EDEDED', backgroundColor: '#FBFBFA' }}>
         <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-gray-400 hover:text-gray-200 text-sm">← Dashboard</Link>
-          <span className="text-sm font-semibold text-gray-100">Whiteboard</span>
-          {saving && <span className="text-xs text-gray-500 animate-pulse">Saving…</span>}
+          <Link href="/dashboard" className="text-sm transition-colors" style={{ color: 'rgba(55,53,47,0.5)' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#37352F')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(55,53,47,0.5)')}>
+            ← Dashboard
+          </Link>
+          <span className="text-sm font-semibold" style={{ color: '#37352F' }}>Whiteboard</span>
+          {saving && <span className="text-xs animate-pulse" style={{ color: 'rgba(55,53,47,0.4)' }}>Saving…</span>}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Course selector */}
+        <div className="flex items-center gap-1.5">
           {courses.map(c => (
             <button key={c.id} onClick={() => switchCourse(c.id)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${selectedCourse === c.id ? 'text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-              style={selectedCourse === c.id ? { backgroundColor: c.color, color: '#1f2937' } : {}}>
+              className="rounded px-3 py-1 text-xs font-medium transition"
+              style={selectedCourse === c.id
+                ? { backgroundColor: c.color + '25', color: c.color, border: `1px solid ${c.color}50` }
+                : { backgroundColor: 'transparent', color: 'rgba(55,53,47,0.65)', border: '1px solid #EDEDED' }}
+              onMouseEnter={e => { if (selectedCourse !== c.id) (e.currentTarget as HTMLElement).style.backgroundColor = '#EFEFED' }}
+              onMouseLeave={e => { if (selectedCourse !== c.id) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent' }}>
               {c.name}
             </button>
           ))}
@@ -238,7 +245,10 @@ export default function WhiteboardPage() {
           {selectedCourse && (
             <>
               <button onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg bg-gray-700 px-3 py-1.5 text-xs text-gray-200 hover:bg-gray-600">
+                className="rounded px-3 py-1.5 text-xs transition"
+                style={{ border: '1px solid #EDEDED', color: '#37352F', backgroundColor: '#FFFFFF' }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#EFEFED')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#FFFFFF')}>
                 Upload PDF
               </button>
               <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
@@ -246,45 +256,47 @@ export default function WhiteboardPage() {
             </>
           )}
           {selection && (
-            <div className="flex items-center gap-2 rounded-lg bg-yellow-900/50 border border-yellow-700 px-3 py-1.5 text-xs text-yellow-300">
+            <div className="flex items-center gap-2 rounded px-3 py-1.5 text-xs" style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>
               <span>"{selection.slice(0, 30)}{selection.length > 30 ? '…' : ''}" selected</span>
-              <span className="text-yellow-500">— double-click canvas to annotate</span>
+              <span style={{ color: '#B45309' }}>— double-click to annotate</span>
             </div>
           )}
-          <div className="text-xs text-gray-500">Double-click canvas to add note</div>
+          <span className="text-xs" style={{ color: 'rgba(55,53,47,0.4)' }}>Double-click canvas to add note</span>
         </div>
       </div>
 
       {/* Canvas */}
       {!selectedCourse ? (
         <div className="flex flex-1 items-center justify-center">
-          <div className="text-center text-gray-500">
+          <div className="text-center">
             <div className="mb-3 text-4xl">🎨</div>
-            <div className="text-sm">Select a module above to open its whiteboard</div>
+            <div className="text-sm" style={{ color: 'rgba(55,53,47,0.5)' }}>Select a module above to open its whiteboard</div>
           </div>
         </div>
       ) : (
         <div className="relative flex flex-1 overflow-hidden">
-          {/* PDF viewer area */}
           <div
             ref={canvasRef}
             onDoubleClick={handleCanvasDoubleClick}
             onMouseUp={handleMouseUp}
             className="relative flex-1 overflow-auto"
-            style={{ userSelect: 'text' }}
+            style={{ userSelect: 'text', backgroundColor: '#FFFFFF' }}
           >
             {pdfUrl ? (
               <iframe src={pdfUrl} className="h-full w-full border-0" title={pdfName || 'PDF'} />
             ) : (
-              <div className="flex h-full flex-col items-center justify-center text-gray-600">
+              <div className="flex h-full flex-col items-center justify-center">
                 <div className="mb-4 text-6xl">📄</div>
-                <div className="mb-2 text-lg font-medium text-gray-500">No PDF loaded</div>
-                <div className="mb-6 text-sm text-gray-600">Upload your lecture notes or study material</div>
+                <div className="mb-2 text-lg font-medium" style={{ color: '#37352F' }}>No PDF loaded</div>
+                <div className="mb-6 text-sm" style={{ color: 'rgba(55,53,47,0.5)' }}>Upload your lecture notes or study material</div>
                 <button onClick={() => fileInputRef.current?.click()}
-                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
+                  className="rounded-lg px-5 py-2.5 text-sm font-medium transition"
+                  style={{ backgroundColor: '#37352F', color: '#FFFFFF' }}
+                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#2f2b26')}
+                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#37352F')}>
                   Upload PDF
                 </button>
-                <div className="mt-6 text-xs text-gray-600">Or double-click anywhere to add a note without a PDF</div>
+                <div className="mt-6 text-xs" style={{ color: 'rgba(55,53,47,0.4)' }}>Or double-click anywhere to add a note without a PDF</div>
               </div>
             )}
 
@@ -298,79 +310,79 @@ export default function WhiteboardPage() {
                 {/* Note header — drag handle */}
                 <div
                   onMouseDown={e => startDrag(e, note.id)}
-                  className="flex cursor-grab items-center justify-between rounded-t-xl px-3 py-2 text-xs font-semibold text-gray-800 shadow-lg active:cursor-grabbing"
-                  style={{ backgroundColor: note.color }}
+                  className="flex cursor-grab items-center justify-between rounded-t-xl px-3 py-2 text-xs font-semibold active:cursor-grabbing"
+                  style={{ backgroundColor: note.color, color: '#37352F', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
                 >
                   <span className="truncate max-w-45">{note.title}</span>
                   <div className="flex items-center gap-1 ml-2 shrink-0">
-                    {note.parent_note_id && <span className="text-gray-500 text-xs">⤷ fork</span>}
+                    {note.parent_note_id && <span className="text-xs" style={{ color: 'rgba(55,53,47,0.5)' }}>⤷ fork</span>}
                     <button onClick={e => { e.stopPropagation(); toggleMinimise(note.id) }}
-                      className="rounded p-0.5 hover:bg-black/10 text-gray-600">
+                      className="rounded p-0.5 transition hover:bg-black/10" style={{ color: 'rgba(55,53,47,0.6)' }}>
                       {note.minimised ? '▼' : '▲'}
                     </button>
                     <button onClick={e => { e.stopPropagation(); forkNote(note.id) }}
-                      className="rounded p-0.5 hover:bg-black/10 text-gray-600" title="Fork into new thread">
+                      className="rounded p-0.5 transition hover:bg-black/10" style={{ color: 'rgba(55,53,47,0.6)' }} title="Fork into new thread">
                       ⑂
                     </button>
                     <button onClick={e => { e.stopPropagation(); deleteNote(note.id) }}
-                      className="rounded p-0.5 hover:bg-black/10 text-gray-600">
+                      className="rounded p-0.5 transition hover:bg-black/10" style={{ color: 'rgba(55,53,47,0.6)' }}>
                       ✕
                     </button>
                   </div>
                 </div>
 
                 {!note.minimised && (
-                  <div className="rounded-b-xl border border-t-0 shadow-xl"
-                    style={{ backgroundColor: note.color + 'ee', borderColor: note.color }}>
+                  <div className="rounded-b-xl border border-t-0"
+                    style={{ backgroundColor: note.color + 'dd', borderColor: note.color, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
 
-                    {/* Highlighted text context */}
                     {note.highlight_text && (
-                      <div className="mx-3 mt-2 rounded border-l-2 border-gray-600/30 bg-black/5 px-2 py-1.5 text-xs italic text-gray-600">
+                      <div className="mx-3 mt-2 rounded px-2 py-1.5 text-xs italic"
+                        style={{ borderLeft: '2px solid rgba(55,53,47,0.2)', backgroundColor: 'rgba(255,255,255,0.4)', color: 'rgba(55,53,47,0.7)' }}>
                         "{note.highlight_text.slice(0, 120)}{note.highlight_text.length > 120 ? '…' : ''}"
                       </div>
                     )}
 
-                    {/* Conversation */}
                     <div className="max-h-60 overflow-y-auto p-3 space-y-2">
                       {note.messages.length === 0 && (
-                        <div className="text-xs text-gray-500 italic text-center py-2">
+                        <div className="text-xs italic text-center py-2" style={{ color: 'rgba(55,53,47,0.5)' }}>
                           Ask Claude anything about this{note.highlight_text ? ' excerpt' : ' topic'}…
                         </div>
                       )}
                       {note.messages.map((m, i) => (
                         <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed ${
-                            m.role === 'user'
-                              ? 'bg-gray-800/80 text-white'
-                              : 'bg-white/70 text-gray-800 border border-black/5'
-                          }`}>
+                          <div className={`max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed`}
+                            style={m.role === 'user'
+                              ? { backgroundColor: '#37352F', color: '#FFFFFF' }
+                              : { backgroundColor: 'rgba(255,255,255,0.8)', color: '#37352F', border: '1px solid rgba(55,53,47,0.1)' }}>
                             {m.content}
                           </div>
                         </div>
                       ))}
                       {loadingChat[note.id] && (
                         <div className="flex justify-start">
-                          <div className="rounded-lg bg-white/70 px-3 py-2 text-xs text-gray-500 border border-black/5">
-                            <span className="animate-pulse">Thinking…</span>
+                          <div className="rounded-lg px-3 py-2 text-xs animate-pulse"
+                            style={{ backgroundColor: 'rgba(255,255,255,0.8)', color: 'rgba(55,53,47,0.5)', border: '1px solid rgba(55,53,47,0.1)' }}>
+                            Thinking…
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Input */}
-                    <div className="flex gap-1.5 border-t border-black/10 p-2">
+                    <div className="flex gap-1.5 p-2" style={{ borderTop: '1px solid rgba(55,53,47,0.1)' }}>
                       <input
                         type="text"
                         value={chatInput[note.id] || ''}
                         onChange={e => setChatInput(prev => ({ ...prev, [note.id]: e.target.value }))}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(note.id) } }}
                         placeholder="Ask Claude…"
-                        className="flex-1 rounded-lg bg-white px-2.5 py-1.5 text-xs text-gray-900 placeholder-gray-400 border border-black/10 focus:outline-none focus:bg-white"
+                        className="flex-1 rounded px-2.5 py-1.5 text-xs focus:outline-none"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.7)', border: '1px solid rgba(55,53,47,0.15)', color: '#37352F' }}
                         onClick={e => e.stopPropagation()}
                       />
                       <button onClick={e => { e.stopPropagation(); sendChat(note.id) }}
                         disabled={!chatInput[note.id]?.trim() || loadingChat[note.id]}
-                        className="rounded-lg bg-gray-800 px-2.5 py-1.5 text-xs text-white hover:bg-gray-700 disabled:opacity-40">
+                        className="rounded px-2.5 py-1.5 text-xs transition disabled:opacity-40"
+                        style={{ backgroundColor: '#37352F', color: '#FFFFFF' }}>
                         →
                       </button>
                     </div>

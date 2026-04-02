@@ -9,11 +9,16 @@ def generate_schedule(
     pomodoro_minutes: int,
     disruptions: List[Dict],  # [{start_date, end_date}]
     start_date: date = None,
+    sessions_per_day: int = None,
+    session_duration_minutes: int = None,
+    preserve_order: bool = False,
 ) -> List[Dict]:
     """
     Assigns each task a scheduled_date and order_index.
     Respects disruption date ranges (zero capacity those days).
     Leaves a 1-day buffer before the exam for review.
+    If sessions_per_day + session_duration_minutes are given, caps tasks/day to
+    sessions_per_day × floor(session_duration_minutes / pomodoro_minutes).
     """
     if start_date is None:
         start_date = date.today()
@@ -29,7 +34,11 @@ def generate_schedule(
             disrupted_dates.add(cur)
             cur += timedelta(days=1)
 
-    pomodoros_per_day = max(1, (daily_study_hours * 60) // pomodoro_minutes)
+    if sessions_per_day and session_duration_minutes:
+        tasks_per_session = max(1, session_duration_minutes // pomodoro_minutes)
+        pomodoros_per_day = sessions_per_day * tasks_per_session
+    else:
+        pomodoros_per_day = max(1, (daily_study_hours * 60) // pomodoro_minutes)
 
     available_days = []
     d = start_date
@@ -39,7 +48,7 @@ def generate_schedule(
         d += timedelta(days=1)
 
     priority_order = {"high": 0, "medium": 1, "low": 2}
-    sorted_tasks = sorted(tasks, key=lambda t: priority_order.get(t.get("priority", "medium"), 1))
+    sorted_tasks = tasks if preserve_order else sorted(tasks, key=lambda t: priority_order.get(t.get("priority", "medium"), 1))
 
     scheduled = []
     day_idx = 0

@@ -16,6 +16,8 @@ class CompleteOnboarding(BaseModel):
     user_id: str
     display_name: Optional[str] = None
     daily_study_hours: int = 4
+    sessions_per_day: Optional[int] = None
+    session_duration_minutes: Optional[int] = None
     pomodoro_preset: str = "classic"         # classic | power | sprint | custom
     custom_work_minutes: Optional[int] = None
     custom_break_minutes: Optional[int] = None
@@ -37,6 +39,8 @@ def complete_onboarding(data: CompleteOnboarding):
         "id": data.user_id,
         "display_name": data.display_name,
         "daily_study_hours": data.daily_study_hours,
+        "sessions_per_day": data.sessions_per_day,
+        "session_duration_minutes": data.session_duration_minutes,
         "pomodoro_work_minutes": work,
         "pomodoro_break_minutes": brk,
         "long_break_minutes": long,
@@ -56,6 +60,30 @@ def complete_onboarding(data: CompleteOnboarding):
 def get_user_profile(user_id: str):
     supabase = get_supabase_client()
     result = supabase.table("user_profiles").select("*").eq("id", user_id).limit(1).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return result.data[0]
+
+
+class UpdateProfile(BaseModel):
+    display_name: Optional[str] = None
+    daily_study_hours: Optional[int] = None
+    sessions_per_day: Optional[int] = None
+    session_duration_minutes: Optional[int] = None
+    pomodoro_work_minutes: Optional[int] = None
+    pomodoro_break_minutes: Optional[int] = None
+    long_break_minutes: Optional[int] = None
+    long_break_interval: Optional[int] = None
+    best_study_times: Optional[List[str]] = None
+
+
+@router.patch("/profile/{user_id}")
+def update_profile(user_id: str, body: UpdateProfile):
+    supabase = get_supabase_client()
+    updates = {k: v for k, v in body.dict().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    result = supabase.table("user_profiles").update(updates).eq("id", user_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Profile not found")
     return result.data[0]
@@ -116,15 +144,22 @@ def delete_course(course_id: str):
 
 class DisruptionCreate(BaseModel):
     user_id: str
-    label: str
-    start_date: str   # ISO date
-    end_date: str     # ISO date
+    start_date: str
+    end_date: str
+    label: Optional[str] = None
+    reason: Optional[str] = None
 
 
 @router.post("/disruptions")
 def create_disruption(body: DisruptionCreate):
     supabase = get_supabase_client()
-    result = supabase.table("disruptions").insert(body.dict()).execute()
+    row = {
+        "user_id": body.user_id,
+        "start_date": body.start_date,
+        "end_date": body.end_date,
+        "label": body.label or body.reason or "",
+    }
+    result = supabase.table("disruptions").insert(row).execute()
     if not result.data:
         raise HTTPException(status_code=400, detail="Failed to save disruption")
     return result.data[0]
