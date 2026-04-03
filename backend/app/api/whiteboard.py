@@ -5,6 +5,14 @@ from typing import List, Optional, Dict, Any
 import anthropic
 import os
 import uuid
+import httpx
+import io
+
+try:
+    import pypdf
+    HAS_PYPDF = True
+except ImportError:
+    HAS_PYPDF = False
 
 router = APIRouter(prefix="/whiteboard")
 
@@ -34,10 +42,11 @@ class ChatMessage(BaseModel):
     course_id: str
     user_id: str
     note_id: str
-    message: str          # new user message
-    # full prior messages so we pass context
+    message: str
     prior_messages: List[Dict[str, str]] = []
-    highlight_text: Optional[str] = None  # what text is highlighted on the PDF
+    highlight_text: Optional[str] = None
+    pdf_url: Optional[str] = None
+    page_number: Optional[int] = None
 
 
 class ForkNote(BaseModel):
@@ -117,7 +126,7 @@ def save_whiteboard(body: WhiteboardSave):
 # ─── Chat with AI on a specific note ─────────────────────────
 
 @router.post("/chat")
-def chat_on_note(body: ChatMessage):
+async def chat_on_note(body: ChatMessage):
     """Send a message in a sticky note's conversation thread."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -131,11 +140,36 @@ def chat_on_note(body: ChatMessage):
         "this is an annotation tool, not a full chat interface. Use bullet points for clarity when listing multiple points."
     )
 
+    # Extract PDF text and add as context
+    if body.pdf_url and HAS_PYPDF:
+        try:
+            async with httpx.AsyncClient() as client:
+                r = await client.get(body.pdf_url, timeout=10)
+            reader = pypdf.PdfReader(io.BytesIO(r.content))
+            if body.page_number and body.page_number <= len(reader.pages):
+                # Give context for the specific page + one either side
+                pages_to_extract = range(
+                    max(0, body.page_number - 2),
+                    min(len(reader.pages), body.page_number + 1)
+                )
+                pdf_text = "\n".join(reader.pages[i].extract_text() or "" for i in pages_to_extract)
+            else:
+                # No page info — extract first 3 pages as overview
+                pdf_text = "\n".join(p.extract_text() or "" for p in reader.pages[:3])
+            if pdf_text.strip():
+                system_prompt += (
+                    f"\n\nHere is the relevant content from the student's PDF"
+                    f"{f' (page {body.page_number})' if body.page_number else ''}:\n\n"
+                    f"{pdf_text[:4000]}"
+                )
+        except Exception:
+            pass  # Silently skip if PDF extraction fails
+
     if body.highlight_text:
         system_prompt += (
-            f"\n\nThe student has highlighted this text from their notes:\n"
+            f"\n\nThe student has highlighted this specific excerpt:\n"
             f"\"{body.highlight_text}\"\n"
-            f"Ground your response in this specific excerpt unless they ask something unrelated."
+            f"Ground your response in this excerpt unless they ask something unrelated."
         )
 
     # Build message history

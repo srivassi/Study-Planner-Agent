@@ -5,9 +5,14 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Document, Page, pdfjs } from 'react-pdf'
+import 'react-pdf/dist/Page/TextLayer.css'
+import 'react-pdf/dist/Page/AnnotationLayer.css'
 
 import { supabase } from '../../lib/supabase'
 import { api } from '../../lib/api'
+
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
 type Message = { role: 'user' | 'assistant'; content: string }
 
@@ -68,6 +73,9 @@ function WhiteboardInner() {
   const [dragging, setDragging] = useState<{ noteId: string; offsetX: number; offsetY: number } | null>(null)
   const [saving, setSaving] = useState(false)
   const [selection, setSelection] = useState<string>('')
+  const [numPages, setNumPages] = useState<number>(0)
+  const [pageNumber, setPageNumber] = useState(1)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; text: string; page: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -151,6 +159,25 @@ function WhiteboardInner() {
     if (sel) setSelection(sel)
   }
 
+  const handleContextMenu = (e: React.MouseEvent, page: number) => {
+    const sel = window.getSelection()?.toString().trim()
+    if (!sel) return
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, text: sel, page })
+  }
+
+  const createNoteFromContext = () => {
+    if (!contextMenu || !canvasRef.current) return
+    const rect = canvasRef.current.getBoundingClientRect()
+    const note = newNote(contextMenu.x - rect.left, contextMenu.y - rect.top, contextMenu.text)
+    note.page_number = contextMenu.page
+    const updated = [...notes, note]
+    updateNotes(updated)
+    setActiveNote(note.id)
+    setSelection('')
+    setContextMenu(null)
+  }
+
   // ── Drag ──────────────────────────────────────────────────
   const startDrag = (e: React.MouseEvent, noteId: string) => {
     e.stopPropagation()
@@ -199,6 +226,8 @@ function WhiteboardInner() {
         message: msg,
         prior_messages: note.messages,
         highlight_text: note.highlight_text || undefined,
+        pdf_url: pdfUrl || undefined,
+        page_number: note.page_number || undefined,
       })
       const updated = notes.map(n => n.id === noteId ? { ...n, messages: res.messages } : n)
       updateNotes(updated)
@@ -301,7 +330,35 @@ function WhiteboardInner() {
             style={{ userSelect: 'text', backgroundColor: '#FFFFFF' }}
           >
             {pdfUrl ? (
-              <iframe src={pdfUrl} className="absolute inset-0 h-full w-full border-0" title={pdfName || 'PDF'} />
+              <div className="absolute inset-0 overflow-auto flex flex-col items-center bg-gray-100 py-4 gap-2">
+                <Document
+                  file={pdfUrl}
+                  onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+                  onMouseUp={handleMouseUp}
+                >
+                  {Array.from({ length: numPages }, (_, i) => (
+                    <div key={i} className="mb-2 shadow-md"
+                      onMouseUp={handleMouseUp}
+                      onContextMenu={e => handleContextMenu(e, i + 1)}>
+                      <Page
+                        pageNumber={i + 1}
+                        width={700}
+                        onDoubleClick={e => {
+                          if (!canvasRef.current) return
+                          const rect = canvasRef.current.getBoundingClientRect()
+                          const note = newNote(e.clientX - rect.left, e.clientY - rect.top, selection || undefined)
+                          note.page_number = i + 1
+                          const updated = [...notes, note]
+                          updateNotes(updated)
+                          setActiveNote(note.id)
+                          setSelection('')
+                          setPageNumber(i + 1)
+                        }}
+                      />
+                    </div>
+                  ))}
+                </Document>
+              </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center">
                 <div className="mb-4 text-6xl">📄</div>
@@ -426,6 +483,24 @@ function WhiteboardInner() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Right-click context menu ── */}
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div className="fixed z-50 rounded-lg shadow-xl py-1 min-w-44"
+            style={{ left: contextMenu.x, top: contextMenu.y, backgroundColor: '#FFFFFF', border: '1px solid #EDEDED' }}>
+            <div className="px-3 py-1.5 text-xs" style={{ color: 'rgba(55,53,47,0.5)', borderBottom: '1px solid #EDEDED' }}>
+              "{contextMenu.text.slice(0, 40)}{contextMenu.text.length > 40 ? '…' : ''}"
+            </div>
+            <button onClick={createNoteFromContext}
+              className="w-full px-3 py-2 text-left text-sm transition hover:bg-[#EFEFED]"
+              style={{ color: '#37352F' }}>
+              💬 Annotate with Claude
+            </button>
+          </div>
+        </>
       )}
     </div>
   )
