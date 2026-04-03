@@ -69,7 +69,7 @@ const PDF_OPTIONS = {
 function PDFViewer({ pdfUrl, numPages, canvasRef, onLoadSuccess, onLoadError, onMouseUp, onContextMenu, onDoubleClick }: {
   pdfUrl: string
   numPages: number
-  canvasRef: React.RefObject<HTMLDivElement>
+  canvasRef: React.RefObject<HTMLDivElement | null>
   onLoadSuccess: (n: number) => void
   onLoadError: (err: Error) => void
   onMouseUp: () => void
