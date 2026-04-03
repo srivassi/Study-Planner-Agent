@@ -66,10 +66,10 @@ const PDF_OPTIONS = {
   standardFontDataUrl: `https://unpkg.com/pdfjs-dist@4.4.168/standard_fonts/`,
 }
 
-function PDFViewer({ pdfUrl, numPages, canvasRef, onLoadSuccess, onLoadError, onMouseUp, onContextMenu, onDoubleClick }: {
+function PDFViewer({ pdfUrl, numPages, pageWidth, onLoadSuccess, onLoadError, onMouseUp, onContextMenu, onDoubleClick }: {
   pdfUrl: string
   numPages: number
-  canvasRef: React.RefObject<HTMLDivElement>
+  pageWidth: number
   onLoadSuccess: (n: number) => void
   onLoadError: (err: Error) => void
   onMouseUp: () => void
@@ -90,7 +90,7 @@ function PDFViewer({ pdfUrl, numPages, canvasRef, onLoadSuccess, onLoadError, on
           onDoubleClick={(e: React.MouseEvent) => onDoubleClick(e, i + 1)}>
           <PDFPage
             pageNumber={i + 1}
-            width={Math.min(700, (canvasRef.current?.clientWidth || 800) - 48)}
+            width={pageWidth}
             renderAnnotationLayer={false}
             renderTextLayer={false}
           />
@@ -121,9 +121,20 @@ function WhiteboardInner() {
   const [numPages, setNumPages] = useState<number>(0)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; text: string; page: number } | null>(null)
+  const [pageWidth, setPageWidth] = useState(700)
   const canvasRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Page width (stable, avoids PDF worker restart) ────────
+  useEffect(() => {
+    const update = () => {
+      if (canvasRef.current) setPageWidth(Math.min(700, canvasRef.current.clientWidth - 48))
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
 
   // ── Auth ──────────────────────────────────────────────────
   useEffect(() => {
@@ -394,7 +405,7 @@ function WhiteboardInner() {
                   <PDFViewer
                     pdfUrl={pdfUrl}
                     numPages={numPages}
-                    canvasRef={canvasRef}
+                    pageWidth={pageWidth}
                     onLoadSuccess={(n) => { setNumPages(n); setPdfError(null) }}
                     onLoadError={(err) => setPdfError(`Failed to load PDF: ${err.message}`)}
                     onMouseUp={handleMouseUp}
