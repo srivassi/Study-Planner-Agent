@@ -424,6 +424,7 @@ function WhiteboardInner() {
               </button>
             )}
             </div>
+          </div>
         </div>
       )}
     </div>
