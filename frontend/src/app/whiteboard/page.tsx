@@ -7,18 +7,16 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { api } from '../../lib/api'
-
-// react-pdf uses browser-only APIs (DOMMatrix) — must be loaded client-side only
 import _dynamic from 'next/dynamic'
-const Document = _dynamic(() => import('react-pdf').then(m => ({ default: m.Document })), { ssr: false })
-const Page = _dynamic(() => import('react-pdf').then(m => ({ default: m.Page })), { ssr: false })
 
-// Set worker on client only
-if (typeof window !== 'undefined') {
-  import('react-pdf').then(({ pdfjs }) => {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
-  })
-}
+const PDFDocument = _dynamic(() => import('react-pdf').then(async m => {
+  const { pdfjs } = m
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+  return { default: m.Document }
+}), { ssr: false })
+
+const PDFPage = _dynamic(() => import('react-pdf').then(m => ({ default: m.Page })), { ssr: false })
+
 
 type Message = { role: 'user' | 'assistant'; content: string }
 
@@ -79,8 +77,8 @@ function WhiteboardInner() {
   const [dragging, setDragging] = useState<{ noteId: string; offsetX: number; offsetY: number } | null>(null)
   const [saving, setSaving] = useState(false)
   const [selection, setSelection] = useState<string>('')
+
   const [numPages, setNumPages] = useState<number>(0)
-  const [pageNumber, setPageNumber] = useState(1)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; text: string; page: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -337,10 +335,9 @@ function WhiteboardInner() {
           >
             {pdfUrl ? (
               <div className="absolute inset-0 overflow-auto flex flex-col items-center bg-gray-100 py-4 gap-2">
-                <Document
+                <PDFDocument
                   file={pdfUrl}
-                  onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-                  onMouseUp={handleMouseUp}
+                  onLoadSuccess={({ numPages: n }: { numPages: number }) => setNumPages(n)}
                   options={{
                     cMapUrl: `https://unpkg.com/pdfjs-dist@4.4.168/cmaps/`,
                     cMapPacked: true,
@@ -350,11 +347,13 @@ function WhiteboardInner() {
                   {Array.from({ length: numPages }, (_, i) => (
                     <div key={i} className="mb-2 shadow-md"
                       onMouseUp={handleMouseUp}
-                      onContextMenu={e => handleContextMenu(e, i + 1)}>
-                      <Page
+                      onContextMenu={(e: React.MouseEvent) => handleContextMenu(e, i + 1)}>
+                      <PDFPage
                         pageNumber={i + 1}
                         width={Math.min(700, (canvasRef.current?.clientWidth || 800) - 48)}
-                        onDoubleClick={e => {
+                        renderAnnotationLayer={false}
+                        renderTextLayer={true}
+                        onDoubleClick={(e: React.MouseEvent) => {
                           if (!canvasRef.current) return
                           const rect = canvasRef.current.getBoundingClientRect()
                           const note = newNote(e.clientX - rect.left, e.clientY - rect.top, selection || undefined)
@@ -363,12 +362,11 @@ function WhiteboardInner() {
                           updateNotes(updated)
                           setActiveNote(note.id)
                           setSelection('')
-                          setPageNumber(i + 1)
                         }}
                       />
                     </div>
                   ))}
-                </Document>
+                </PDFDocument>
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center">
