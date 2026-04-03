@@ -173,19 +173,22 @@ function WhiteboardInner() {
   // ── PDF upload ────────────────────────────────────────────
   const uploadPdf = async (file: File) => {
     if (!userId || !selectedCourse) return
-    const path = `${userId}/${selectedCourse}/${file.name}`
-    const { error } = await supabase.storage.from('whiteboards').upload(path, file, { upsert: true })
-    if (error) { alert('Upload failed: ' + error.message); return }
-    const { data } = supabase.storage.from('whiteboards').getPublicUrl(path)
-    const newUrl = data.publicUrl
-    const newName = file.name
-    setPdfUrl(newUrl)
-    setPdfName(newName)
-    // Save directly with the new values — don't rely on state closure
-    if (saveTimer.current) clearTimeout(saveTimer.current)
     setSaving(true)
     try {
-      await api.saveWhiteboard({ course_id: selectedCourse, user_id: userId, sticky_notes: notes, pdf_name: newName, pdf_url: newUrl })
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('user_id', userId)
+      formData.append('course_id', selectedCourse)
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/whiteboard/upload-pdf`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert('Upload failed: ' + (e.detail || res.statusText)); return }
+      const { pdf_url, pdf_name } = await res.json()
+      setPdfUrl(pdf_url)
+      setPdfName(pdf_name)
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await api.saveWhiteboard({ course_id: selectedCourse, user_id: userId, sticky_notes: notes, pdf_name: pdf_name, pdf_url: pdf_url })
     } finally { setSaving(false) }
   }
 

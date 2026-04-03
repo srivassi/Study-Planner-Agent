@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from app.core.supabase import get_supabase_client
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import anthropic
 import os
 import uuid
-import httpx
 import io
 
 try:
@@ -54,6 +53,22 @@ class ForkNote(BaseModel):
     user_id: str
     parent_note_id: str
     fork_message: Optional[str] = None   # optional opening message for the fork
+
+
+# ─── PDF upload (service role bypasses RLS) ──────────────────
+
+@router.post("/upload-pdf")
+def upload_pdf(
+    file: UploadFile = File(...),
+    user_id: str = Form(...),
+    course_id: str = Form(...),
+):
+    supabase = get_supabase_client()
+    content = file.file.read()
+    path = f"{user_id}/{course_id}/{file.filename}"
+    supabase.storage.from_("whiteboards").upload(path, content, {"content-type": file.content_type or "application/pdf", "upsert": "true"})
+    pdf_url = supabase.storage.from_("whiteboards").get_public_url(path)
+    return {"pdf_url": pdf_url, "pdf_name": file.filename}
 
 
 # ─── Get whiteboard for a course ─────────────────────────────
@@ -126,7 +141,7 @@ def save_whiteboard(body: WhiteboardSave):
 # ─── Chat with AI on a specific note ─────────────────────────
 
 @router.post("/chat")
-async def chat_on_note(body: ChatMessage):
+def chat_on_note(body: ChatMessage):
     """Send a message in a sticky note's conversation thread."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -143,18 +158,16 @@ async def chat_on_note(body: ChatMessage):
     # Extract PDF text and add as context
     if body.pdf_url and HAS_PYPDF:
         try:
-            async with httpx.AsyncClient() as client:
-                r = await client.get(body.pdf_url, timeout=10)
+            import requests as _requests
+            r = _requests.get(body.pdf_url, timeout=10)
             reader = pypdf.PdfReader(io.BytesIO(r.content))
             if body.page_number and body.page_number <= len(reader.pages):
-                # Give context for the specific page + one either side
                 pages_to_extract = range(
                     max(0, body.page_number - 2),
                     min(len(reader.pages), body.page_number + 1)
                 )
                 pdf_text = "\n".join(reader.pages[i].extract_text() or "" for i in pages_to_extract)
             else:
-                # No page info — extract first 3 pages as overview
                 pdf_text = "\n".join(p.extract_text() or "" for p in reader.pages[:3])
             if pdf_text.strip():
                 system_prompt += (

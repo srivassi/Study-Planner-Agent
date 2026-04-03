@@ -7,4 +7,3 @@ supabase
 requests
 python-multipart
 pypdf
-httpx
