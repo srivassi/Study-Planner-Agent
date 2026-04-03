@@ -352,7 +352,7 @@ function WhiteboardInner() {
                         pageNumber={i + 1}
                         width={Math.min(700, (canvasRef.current?.clientWidth || 800) - 48)}
                         renderAnnotationLayer={false}
-                        renderTextLayer={true}
+                        renderTextLayer={false}
                         onDoubleClick={(e: React.MouseEvent) => {
                           if (!canvasRef.current) return
                           const rect = canvasRef.current.getBoundingClientRect()
