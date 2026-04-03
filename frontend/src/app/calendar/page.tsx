@@ -44,6 +44,12 @@ export default function CalendarPage() {
   const [cursor, setCursor] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d })
   const [selectedDate, setSelectedDate] = useState<string | null>(() => toISO(new Date()))
   const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [addingTask, setAddingTask] = useState(false)
+  const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [newTaskCourse, setNewTaskCourse] = useState('')
+  const [newTaskMinutes, setNewTaskMinutes] = useState('25')
+  const [savingTask, setSavingTask] = useState(false)
 
   const today = new Date(); today.setHours(0,0,0,0)
 
@@ -55,6 +61,7 @@ export default function CalendarPage() {
         const { data: { session } } = await supabase.auth.getSession() as any
         if (!session) { router.push('/auth/signin'); return }
         uid = session.user.id
+        setUserId(uid)
       }
       const [coursesData, profileData] = await Promise.all([
         api.getCourses(uid).catch(() => []),
@@ -365,6 +372,77 @@ export default function CalendarPage() {
                   {selectedTasks.length === 0 ? 'Nothing scheduled' : `${selectedTasks.length} task${selectedTasks.length !== 1 ? 's' : ''}`}
                 </div>
               </div>
+
+              {/* ── Add task ── */}
+              {addingTask ? (
+                <div className="mb-4 space-y-2 rounded-lg p-3" style={{ border: `1px solid ${NOTION.border}`, backgroundColor: NOTION.bg }}>
+                  <input
+                    autoFocus
+                    value={newTaskTitle}
+                    onChange={e => setNewTaskTitle(e.target.value)}
+                    placeholder="Task title"
+                    className="w-full rounded px-2 py-1.5 text-sm text-gray-900 focus:outline-none"
+                    style={{ border: `1px solid ${NOTION.border}` }}
+                  />
+                  <select
+                    value={newTaskCourse}
+                    onChange={e => setNewTaskCourse(e.target.value)}
+                    className="w-full rounded px-2 py-1.5 text-sm text-gray-900 focus:outline-none"
+                    style={{ border: `1px solid ${NOTION.border}` }}>
+                    <option value="">Select course</option>
+                    {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min={5} max={240}
+                      value={newTaskMinutes}
+                      onChange={e => setNewTaskMinutes(e.target.value)}
+                      className="w-16 rounded px-2 py-1.5 text-center text-sm text-gray-900 focus:outline-none"
+                      style={{ border: `1px solid ${NOTION.border}` }}
+                    />
+                    <span className="text-xs" style={{ color: NOTION.muted }}>minutes</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      disabled={!newTaskTitle.trim() || !newTaskCourse || savingTask}
+                      onClick={async () => {
+                        if (!userId || !selectedDate) return
+                        setSavingTask(true)
+                        try {
+                          const result = await api.createTasks([{
+                            course_id: newTaskCourse,
+                            user_id: userId,
+                            title: newTaskTitle.trim(),
+                            estimated_minutes: parseInt(newTaskMinutes) || 25,
+                            scheduled_date: selectedDate,
+                            order_index: selectedTasks.length,
+                          }])
+                          const course = courses.find(c => c.id === newTaskCourse)
+                          setTasks(prev => [...prev, ...result.map((t: Task) => ({
+                            ...t,
+                            courses: { name: course?.name || '', color: course?.color || '#888', exam_date: course?.exam_date },
+                          }))])
+                          setNewTaskTitle(''); setNewTaskCourse(''); setNewTaskMinutes('25'); setAddingTask(false)
+                        } finally { setSavingTask(false) }
+                      }}
+                      className="rounded px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                      style={{ backgroundColor: NOTION.text }}>
+                      {savingTask ? 'Adding…' : 'Add'}
+                    </button>
+                    <button onClick={() => { setAddingTask(false); setNewTaskTitle(''); setNewTaskCourse(''); setNewTaskMinutes('25') }}
+                      className="rounded px-3 py-1.5 text-xs transition hover:bg-[#EFEFED]"
+                      style={{ color: NOTION.muted }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setAddingTask(true)}
+                  className="mb-4 w-full rounded px-3 py-2 text-left text-sm transition hover:bg-[#EFEFED]"
+                  style={{ border: `1px solid ${NOTION.border}`, color: NOTION.muted }}>
+                  + Add task
+                </button>
+              )}
 
               {selectedTasks.length > 0 && (
                 <div className="space-y-4">

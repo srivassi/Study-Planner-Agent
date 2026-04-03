@@ -236,9 +236,7 @@ def full_reschedule(body: FullRescheduleRequest):
     supabase = get_supabase_client()
     disruptions = supabase.table("disruptions").select("*").eq("user_id", body.user_id).execute().data or []
     profile_rows = supabase.table("user_profiles").select("*").eq("id", body.user_id).limit(1).execute().data
-    if not profile_rows:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    profile = profile_rows[0]
+    profile = profile_rows[0] if profile_rows else {}
     daily_hours = profile.get("daily_study_hours", 4)
     pomodoro_minutes = profile.get("pomodoro_work_minutes", 25)
     sessions_per_day = body.sessions_per_day_override or profile.get("sessions_per_day")
