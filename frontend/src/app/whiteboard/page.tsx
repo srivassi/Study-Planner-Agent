@@ -5,14 +5,20 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Document, Page, pdfjs } from 'react-pdf'
-import 'react-pdf/dist/Page/TextLayer.css'
-import 'react-pdf/dist/Page/AnnotationLayer.css'
-
 import { supabase } from '../../lib/supabase'
 import { api } from '../../lib/api'
 
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+// react-pdf uses browser-only APIs (DOMMatrix) — must be loaded client-side only
+import _dynamic from 'next/dynamic'
+const Document = _dynamic(() => import('react-pdf').then(m => ({ default: m.Document })), { ssr: false })
+const Page = _dynamic(() => import('react-pdf').then(m => ({ default: m.Page })), { ssr: false })
+
+// Set worker on client only
+if (typeof window !== 'undefined') {
+  import('react-pdf').then(({ pdfjs }) => {
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+  })
+}
 
 type Message = { role: 'user' | 'assistant'; content: string }
 
