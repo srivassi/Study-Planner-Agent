@@ -32,6 +32,7 @@ export const api = {
   generatePlan: (data) => req('/agent/generate-plan', { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Tasks ─────────────────────────────────────────────
+  createTasks: (tasks) => req('/tasks/', { method: 'POST', body: JSON.stringify(tasks) }),
   getTasks: (courseId) => req(`/tasks/course/${courseId}`),
   getTodayTasks: (userId) => req(`/tasks/today/${userId}`),
   updateTaskStatus: (taskId, status) => req(`/tasks/${taskId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
