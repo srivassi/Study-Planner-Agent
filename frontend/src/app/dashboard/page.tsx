@@ -222,10 +222,11 @@ export default function Dashboard() {
           {/* Nav */}
           <div className="mb-2 space-y-0.5">
             {[
-              { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
-              { href: '/calendar',  label: 'Calendar',  icon: '📅' },
-              { href: '/whiteboard',label: 'Whiteboard',icon: '🎨' },
-              { href: '/settings',  label: 'Settings',  icon: '⚙️' },
+              { href: '/dashboard',   label: 'Dashboard',  icon: '🏠' },
+              { href: '/calendar',    label: 'Calendar',   icon: '📅' },
+              { href: '/flashcards',  label: 'Flashcards', icon: '🃏' },
+              { href: '/whiteboard',  label: 'Whiteboard', icon: '🎨' },
+              { href: '/settings',    label: 'Settings',   icon: '⚙️' },
             ].map(item => (
               <Link key={item.href} href={item.href}
                 className="flex items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-[#EFEFED]"
