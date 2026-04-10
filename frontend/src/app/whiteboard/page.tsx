@@ -116,6 +116,7 @@ function WhiteboardInner() {
   const [loadingChat, setLoadingChat] = useState<{ [noteId: string]: boolean }>({})
   const [dragging, setDragging] = useState<{ noteId: string; offsetX: number; offsetY: number } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [flashcardGenStatus, setFlashcardGenStatus] = useState<null | 'generating' | 'done' | 'error'>(null)
   const [selection, setSelection] = useState<string>('')
 
   const [numPages, setNumPages] = useState<number>(0)
@@ -161,6 +162,7 @@ function WhiteboardInner() {
     setSelectedCourse(courseId)
     setNumPages(0)
     setPdfError(null)
+    setFlashcardGenStatus(null)
     if (userId) loadWhiteboard(userId, courseId)
   }
 
@@ -185,6 +187,7 @@ function WhiteboardInner() {
   const uploadPdf = async (file: File) => {
     if (!userId || !selectedCourse) return
     setSaving(true)
+    setFlashcardGenStatus(null)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -200,6 +203,22 @@ function WhiteboardInner() {
       setPdfName(pdf_name)
       if (saveTimer.current) clearTimeout(saveTimer.current)
       await api.saveWhiteboard({ course_id: selectedCourse, user_id: userId, sticky_notes: notes, pdf_name: pdf_name, pdf_url: pdf_url })
+
+      // Auto-generate a flashcard set from the uploaded PDF in the background
+      setFlashcardGenStatus('generating')
+      const courseName = courses.find(c => c.id === selectedCourse)?.name || 'Module'
+      const setTitle = pdf_name.replace(/\.pdf$/i, '') || courseName
+      const fcForm = new FormData()
+      fcForm.append('file', file)
+      fcForm.append('user_id', userId)
+      fcForm.append('course_id', selectedCourse)
+      fcForm.append('title', setTitle)
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/flashcards/generate`, { method: 'POST', body: fcForm })
+        .then(r => {
+          if (r.ok) setFlashcardGenStatus('done')
+          else setFlashcardGenStatus('error')
+        })
+        .catch(() => setFlashcardGenStatus('error'))
     } finally { setSaving(false) }
   }
 
@@ -362,6 +381,24 @@ function WhiteboardInner() {
               <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
                 onChange={e => e.target.files?.[0] && uploadPdf(e.target.files[0])} />
             </>
+          )}
+          {flashcardGenStatus === 'generating' && (
+            <div className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs" style={{ backgroundColor: '#EFF6FF', border: '1px solid #93C5FD', color: '#1D4ED8' }}>
+              <span className="animate-spin">⟳</span> Generating flashcards…
+            </div>
+          )}
+          {flashcardGenStatus === 'done' && (
+            <div
+              className="flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-xs"
+              style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', color: '#16A34A' }}
+              onClick={() => selectedCourse && router.push(`/flashcards?course=${selectedCourse}`)}>
+              ✓ Flashcards ready — view →
+            </div>
+          )}
+          {flashcardGenStatus === 'error' && (
+            <div className="flex items-center gap-1.5 rounded px-3 py-1.5 text-xs" style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#DC2626' }}>
+              ⚠ Flashcard generation failed
+            </div>
           )}
           {selection && (
             <div className="flex items-center gap-2 rounded px-3 py-1.5 text-xs" style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E' }}>

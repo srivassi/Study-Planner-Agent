@@ -48,6 +48,15 @@ export const api = {
   reschedule: (data) => req('/study/reschedule', { method: 'POST', body: JSON.stringify(data) }),
   fullReschedule: (userId, feedback, options = {}) => req('/study/full-reschedule', { method: 'POST', body: JSON.stringify({ user_id: userId, feedback, ...options }) }),
 
+  // ── Flashcards ────────────────────────────────────────
+  getFlashcardSets: (courseId, userId) => req(`/flashcards/sets/${courseId}?user_id=${userId}`),
+  createFlashcardSet: (data) => req('/flashcards/sets', { method: 'POST', body: JSON.stringify(data) }),
+  deleteFlashcardSet: (setId) => req(`/flashcards/sets/${setId}`, { method: 'DELETE' }),
+  getFlashcards: (setId) => req(`/flashcards/${setId}`),
+  addFlashcard: (data) => req('/flashcards/cards', { method: 'POST', body: JSON.stringify(data) }),
+  updateFlashcard: (cardId, data) => req(`/flashcards/cards/${cardId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteFlashcard: (cardId) => req(`/flashcards/cards/${cardId}`, { method: 'DELETE' }),
+
   // ── Whiteboard ────────────────────────────────────────
   getWhiteboard: (courseId, userId) => req(`/whiteboard/${courseId}?user_id=${userId}`),
   saveWhiteboard: (data) => req('/whiteboard/save', { method: 'POST', body: JSON.stringify(data) }),
