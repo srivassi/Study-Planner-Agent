@@ -38,6 +38,42 @@ type Course = { id: string; name: string; color: string }
 
 const NOTE_COLORS = ['#FEF08A', '#BBF7D0', '#BFDBFE', '#FDE68A', '#F5D0FE', '#FECACA']
 
+/** Renders a small subset of markdown: bold, inline code, bullet lists. */
+function renderMarkdown(text: string): React.ReactNode {
+  return text.split('\n').map((line, li) => {
+    // Bullet point
+    const isBullet = /^[\s]*[-*•]\s/.test(line)
+    const content = isBullet ? line.replace(/^[\s]*[-*•]\s/, '') : line
+
+    // Split on **bold** and `code`
+    const parts: React.ReactNode[] = []
+    const regex = /(\*\*(.+?)\*\*|`(.+?)`)/g
+    let last = 0
+    let match
+    while ((match = regex.exec(content)) !== null) {
+      if (match.index > last) parts.push(content.slice(last, match.index))
+      if (match[0].startsWith('**')) {
+        parts.push(<strong key={match.index}>{match[2]}</strong>)
+      } else {
+        parts.push(
+          <code key={match.index} style={{ backgroundColor: 'rgba(55,53,47,0.08)', borderRadius: 3, padding: '0 3px', fontFamily: 'monospace', fontSize: '0.9em' }}>
+            {match[3]}
+          </code>
+        )
+      }
+      last = match.index + match[0].length
+    }
+    if (last < content.length) parts.push(content.slice(last))
+
+    return (
+      <div key={li} style={isBullet ? { paddingLeft: 12, display: 'flex', gap: 4 } : {}}>
+        {isBullet && <span style={{ opacity: 0.5, flexShrink: 0 }}>•</span>}
+        <span>{parts}</span>
+      </div>
+    )
+  })
+}
+
 function newNote(x: number, y: number, highlight?: string): StickyNote {
   return {
     id: crypto.randomUUID(),
@@ -531,7 +567,7 @@ function WhiteboardInner() {
                             style={m.role === 'user'
                               ? { backgroundColor: '#37352F', color: '#FFFFFF' }
                               : { backgroundColor: 'rgba(255,255,255,0.8)', color: '#37352F', border: '1px solid rgba(55,53,47,0.1)' }}>
-                            {m.content}
+                            {m.role === 'assistant' ? renderMarkdown(m.content) : m.content}
                           </div>
                         </div>
                       ))}
