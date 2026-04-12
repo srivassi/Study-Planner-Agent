@@ -46,6 +46,7 @@ export const api = {
   completePomodoro: (sessionId, notes) => req('/study/pomodoro/complete', { method: 'POST', body: JSON.stringify({ session_id: sessionId, notes }) }),
   getSessions: (userId) => req(`/study/pomodoro/sessions/${userId}`),
   reschedule: (data) => req('/study/reschedule', { method: 'POST', body: JSON.stringify(data) }),
+  reschedulePreview: (userId, feedback, options = {}) => req('/study/reschedule-preview', { method: 'POST', body: JSON.stringify({ user_id: userId, feedback, ...options }) }),
   fullReschedule: (userId, feedback, options = {}) => req('/study/full-reschedule', { method: 'POST', body: JSON.stringify({ user_id: userId, feedback, ...options }) }),
 
   // ── Flashcards ────────────────────────────────────────

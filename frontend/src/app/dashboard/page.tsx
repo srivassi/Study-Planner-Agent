@@ -78,6 +78,9 @@ export default function Dashboard() {
   const [rescheduleSuccess, setRescheduleSuccess] = useState(false)
   const [rescheduleInterleave, setRescheduleInterleave] = useState(true)
   const [rescheduleSessionsOverride, setRescheduleSessionsOverride] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewSummary, setPreviewSummary] = useState('')
+  const [previewDirectives, setPreviewDirectives] = useState<any>(null)
   const [showEOD, setShowEOD] = useState(false)
   const [eodChecked, setEodChecked] = useState<Set<string>>(new Set())
   const [eodNotes, setEodNotes] = useState('')
@@ -676,71 +679,124 @@ export default function Dashboard() {
       {showRescheduleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl p-6 shadow-xl" style={{ backgroundColor: NOTION.bg, border: `1px solid ${NOTION.border}` }}>
-            <h2 className="mb-1 text-lg font-semibold" style={{ color: NOTION.text }}>Reschedule</h2>
-            <p className="mb-4 text-sm" style={{ color: NOTION.muted }}>
-              Your schedule will be replanned around your busy periods. Optionally tell Claude what to change.
-            </p>
-            <textarea
-              rows={3}
-              value={rescheduleFeedback}
-              onChange={e => setRescheduleFeedback(e.target.value)}
-              placeholder="e.g. too many AI tasks on Fridays, spread the databases content more evenly, put harder topics earlier in the week…"
-              className="w-full resize-none rounded px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
-              style={{ border: `1px solid ${NOTION.border}`, backgroundColor: '#FAFAF9' }}
-            />
-            <div className="mt-3 space-y-2">
-              <label className="flex cursor-pointer items-center gap-2.5">
-                <input type="checkbox" checked={rescheduleInterleave} onChange={e => setRescheduleInterleave(e.target.checked)}
-                  className="h-4 w-4 rounded" />
-                <span className="text-sm" style={{ color: NOTION.text }}>Cover all modules each day</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <span className="text-sm" style={{ color: NOTION.muted }}>Override sessions/day</span>
-                <input type="number" min={1} max={8} value={rescheduleSessionsOverride}
-                  onChange={e => setRescheduleSessionsOverride(e.target.value)}
-                  placeholder="—"
-                  className="w-16 rounded px-2 py-1 text-center text-sm text-gray-900 focus:outline-none"
-                  style={{ border: `1px solid ${NOTION.border}`, backgroundColor: '#FAFAF9' }} />
-                <span className="text-xs" style={{ color: NOTION.muted }}>leave blank to use profile setting</span>
-              </div>
-            </div>
-            {rescheduleError && (
-              <div className="mt-3 rounded px-3 py-2 text-xs" style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
-                {rescheduleError}
-              </div>
+            <h2 className="mb-1 text-lg font-semibold" style={{ color: NOTION.text }}>
+              {previewSummary ? 'Confirm reschedule' : 'Reschedule'}
+            </h2>
+
+            {!previewSummary ? (
+              /* ── Step 1: input ── */
+              <>
+                <p className="mb-4 text-sm" style={{ color: NOTION.muted }}>
+                  Claude will analyse your deadlines and replan intelligently. Optionally tell it what to change.
+                </p>
+                <textarea
+                  rows={3}
+                  value={rescheduleFeedback}
+                  onChange={e => setRescheduleFeedback(e.target.value)}
+                  placeholder="e.g. I only have 2 weeks left, focus on AI first, spread databases more evenly…"
+                  className="w-full resize-none rounded px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+                  style={{ border: `1px solid ${NOTION.border}`, backgroundColor: '#FAFAF9' }}
+                />
+                <div className="mt-3 space-y-2">
+                  <label className="flex cursor-pointer items-center gap-2.5">
+                    <input type="checkbox" checked={rescheduleInterleave} onChange={e => setRescheduleInterleave(e.target.checked)}
+                      className="h-4 w-4 rounded" />
+                    <span className="text-sm" style={{ color: NOTION.text }}>Cover all modules each day</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm" style={{ color: NOTION.muted }}>Override sessions/day</span>
+                    <input type="number" min={1} max={8} value={rescheduleSessionsOverride}
+                      onChange={e => setRescheduleSessionsOverride(e.target.value)}
+                      placeholder="—"
+                      className="w-16 rounded px-2 py-1 text-center text-sm text-gray-900 focus:outline-none"
+                      style={{ border: `1px solid ${NOTION.border}`, backgroundColor: '#FAFAF9' }} />
+                    <span className="text-xs" style={{ color: NOTION.muted }}>leave blank to use profile setting</span>
+                  </div>
+                </div>
+                {rescheduleError && (
+                  <div className="mt-3 rounded px-3 py-2 text-xs" style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
+                    {rescheduleError}
+                  </div>
+                )}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button onClick={() => { setShowRescheduleModal(false); setRescheduleFeedback(''); setRescheduleError(''); setRescheduleSessionsOverride(''); setPreviewSummary(''); setPreviewDirectives(null) }}
+                    className="rounded px-4 py-2 text-sm transition hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>
+                    Cancel
+                  </button>
+                  <button
+                    disabled={previewLoading}
+                    onClick={async () => {
+                      if (!userId) return
+                      setPreviewLoading(true)
+                      setRescheduleError('')
+                      try {
+                        const result = await api.reschedulePreview(userId, rescheduleFeedback || undefined, {
+                          interleave_courses: rescheduleInterleave,
+                          sessions_per_day_override: rescheduleSessionsOverride ? parseInt(rescheduleSessionsOverride) : undefined,
+                        })
+                        setPreviewSummary(result.summary)
+                        setPreviewDirectives(result.directives)
+                      } catch (e: any) {
+                        setRescheduleError(e?.message || 'Could not generate preview')
+                      } finally { setPreviewLoading(false) }
+                    }}
+                    className="rounded px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
+                    style={{ backgroundColor: NOTION.text }}>
+                    {previewLoading ? 'Analysing…' : 'Preview →'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              /* ── Step 2: confirm ── */
+              <>
+                <div className="mb-5 mt-2 rounded-lg p-4 text-sm leading-relaxed" style={{ backgroundColor: '#FAFAF9', border: `1px solid ${NOTION.border}`, color: NOTION.text }}>
+                  {previewSummary}
+                </div>
+                <p className="mb-4 text-xs" style={{ color: NOTION.muted }}>
+                  Apply this plan? You can go back to adjust your feedback.
+                </p>
+                {rescheduleError && (
+                  <div className="mb-3 rounded px-3 py-2 text-xs" style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>
+                    {rescheduleError}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => { setPreviewSummary(''); setPreviewDirectives(null); setRescheduleError('') }}
+                    className="rounded px-4 py-2 text-sm transition hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>
+                    ← Back
+                  </button>
+                  <button
+                    disabled={rescheduling}
+                    onClick={async () => {
+                      if (!userId) return
+                      setRescheduling(true)
+                      setRescheduleError('')
+                      try {
+                        await api.fullReschedule(userId, rescheduleFeedback || undefined, {
+                          interleave_courses: rescheduleInterleave,
+                          sessions_per_day_override: rescheduleSessionsOverride ? parseInt(rescheduleSessionsOverride) : undefined,
+                          directives: previewDirectives,
+                        })
+                        const plan = await api.getTodayPlan(userId).catch(() => ({ tasks: [] }))
+                        setTodayTasks(plan.tasks || [])
+                        setShowRescheduleModal(false)
+                        setRescheduleFeedback('')
+                        setRescheduleSessionsOverride('')
+                        setPreviewSummary('')
+                        setPreviewDirectives(null)
+                        setRescheduleSuccess(true)
+                        setTimeout(() => setRescheduleSuccess(false), 3000)
+                      } catch (e: any) {
+                        setRescheduleError(e?.message || 'Something went wrong')
+                      } finally { setRescheduling(false) }
+                    }}
+                    className="rounded px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
+                    style={{ backgroundColor: NOTION.text }}>
+                    {rescheduling ? 'Applying…' : 'Confirm & apply →'}
+                  </button>
+                </div>
+              </>
             )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => { setShowRescheduleModal(false); setRescheduleFeedback(''); setRescheduleError(''); setRescheduleSessionsOverride('') }}
-                className="rounded px-4 py-2 text-sm transition hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>
-                Cancel
-              </button>
-              <button
-                disabled={rescheduling}
-                onClick={async () => {
-                  if (!userId) return
-                  setRescheduling(true)
-                  setRescheduleError('')
-                  try {
-                    await api.fullReschedule(userId, rescheduleFeedback || undefined, {
-                      interleave_courses: rescheduleInterleave,
-                      sessions_per_day_override: rescheduleSessionsOverride ? parseInt(rescheduleSessionsOverride) : undefined,
-                    })
-                    const plan = await api.getTodayPlan(userId).catch(() => ({ tasks: [] }))
-                    setTodayTasks(plan.tasks || [])
-                    setShowRescheduleModal(false)
-                    setRescheduleFeedback('')
-                    setRescheduleSessionsOverride('')
-                    setRescheduleSuccess(true)
-                    setTimeout(() => setRescheduleSuccess(false), 3000)
-                  } catch (e: any) {
-                    setRescheduleError(e?.message || 'Something went wrong')
-                  } finally { setRescheduling(false) }
-                }}
-                className="rounded px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50"
-                style={{ backgroundColor: NOTION.text }}>
-                {rescheduling ? 'Regenerating…' : 'Regenerate →'}
-              </button>
-            </div>
           </div>
         </div>
       )}
