@@ -69,114 +69,143 @@ const MESSAGES = [
 // SCENE COMPONENTS
 // ═══════════════════════════════════════════════════════════════
 
-// ── Coffee ────────────────────────────────────────────────────
+// ── Coffee: 3-stage barista workflow ─────────────────────────
 function CoffeeScene({ progress }: { progress: number }) {
-  const fillPct = 28 + progress * 0.45
-  const steamOpacity = Math.max(0, 1 - progress * 0.008)
+  const stage = progress < 33 ? 'pull' : progress < 67 ? 'steam' : 'pour'
+  const sp = stage === 'pull' ? progress / 33 : stage === 'steam' ? (progress - 33) / 34 : (progress - 67) / 33
   return (
-    <div style={{ position: 'relative', height: 220, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+    <div style={{ position: 'relative', height: 220, overflow: 'hidden' }}>
       <style>{`
-        @keyframes sw0{0%,100%{transform:translateY(0) translateX(0) scaleX(1);opacity:.22}
-          30%{transform:translateY(-12px) translateX(-4px) scaleX(1.8);opacity:.12}
-          70%{transform:translateY(-26px) translateX(3px) scaleX(1.2);opacity:.05}
-          100%{transform:translateY(-40px) scaleX(0.5);opacity:0}}
-        @keyframes sw1{0%,100%{transform:translateY(0) translateX(0) scaleX(1);opacity:.18}
-          35%{transform:translateY(-14px) translateX(5px) scaleX(2);opacity:.1}
-          100%{transform:translateY(-42px) scaleX(0.4);opacity:0}}
-        @keyframes sw2{0%,100%{transform:translateY(0) scaleX(1);opacity:.2}
-          40%{transform:translateY(-10px) translateX(-3px) scaleX(1.5);opacity:.08}
-          100%{transform:translateY(-38px) scaleX(0.6);opacity:0}}
-        @keyframes sw3{0%,100%{transform:translateY(0) translateX(2px) scaleX(1);opacity:.16}
-          45%{transform:translateY(-18px) translateX(-2px) scaleX(1.6);opacity:.07}
-          100%{transform:translateY(-44px) scaleX(0.3);opacity:0}}
-        @keyframes coffeeGlow{0%,100%{opacity:0.6;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
-        @keyframes liquidSheen{0%,100%{opacity:0.15}50%{opacity:0.35}}
+        @keyframes espStream{0%{height:0;opacity:0}15%{opacity:1}100%{height:52px;opacity:1}}
+        @keyframes bubble{0%{transform:translateY(0) scale(1);opacity:0.75}100%{transform:translateY(-38px) scale(0.3);opacity:0}}
+        @keyframes steamWaft{0%{transform:translateY(0) scaleX(1);opacity:0.28}100%{transform:translateY(-28px) scaleX(2.2);opacity:0}}
+        @keyframes pourWiggle{0%,100%{transform:rotate(0deg) scaleX(1)}50%{transform:rotate(1.5deg) scaleX(0.8)}}
+        @keyframes stageIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes sheen{0%,100%{opacity:0.12}50%{opacity:0.32}}
       `}</style>
 
-      {/* Ambient glow beneath cup */}
-      <div style={{
-        position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)',
-        width: 160, height: 60, borderRadius: '50%',
-        background: `radial-gradient(ellipse, rgba(201,120,40,${0.14 + progress * 0.0018}) 0%, transparent 70%)`,
-        animation: 'coffeeGlow 3s ease-in-out infinite',
-        filter: 'blur(8px)',
-      }} />
-
-      {/* Table */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: -20, right: -20, height: 22,
-        background: 'linear-gradient(180deg,#3a1e0c 0%,#261208 100%)',
-        borderRadius: '0 0 14px 14px',
-        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.4)',
-      }} />
-
-      {/* Saucer */}
-      <div style={{
-        position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)',
-        width: 108, height: 13, borderRadius: '50%',
-        background: 'linear-gradient(180deg,#9a7060 0%,#6a4030 100%)',
-        boxShadow: '0 4px 14px rgba(0,0,0,0.55)',
-      }} />
-
-      {/* Cup body */}
-      <div style={{
-        position: 'absolute', bottom: 25, left: '50%', transform: 'translateX(-50%)',
-        width: 76, height: 68,
-        background: 'linear-gradient(135deg,#b08070 0%,#8a5848 45%,#a07060 100%)',
-        borderRadius: '8px 8px 22px 22px',
-        boxShadow: 'inset -8px 0 14px rgba(0,0,0,0.28), 0 6px 18px rgba(0,0,0,0.45)',
-        overflow: 'hidden',
+      {/* Stage label */}
+      <div key={stage} style={{
+        position: 'absolute', top: 6, left: 0, right: 0, textAlign: 'center',
+        fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.38)', animation: 'stageIn 0.5s ease forwards',
       }}>
-        {/* Inner opening ring (top of cup) */}
-        <div style={{
-          position: 'absolute', top: -4, left: -3, right: -3, height: 10,
-          borderRadius: '50%', background: '#7a4838',
-          boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.4)',
-        }} />
-        {/* Coffee liquid */}
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0,
-          height: `${fillPct}%`,
-          background: 'linear-gradient(180deg,#a05820 0%,#4a2010 100%)',
-          transition: 'height 4s ease',
+        {stage === 'pull' ? '☕ Pulling espresso' : stage === 'steam' ? '💨 Steaming milk' : '🎨 Pouring'}
+      </div>
+
+      {/* ── STAGE 1: Pull ── */}
+      <div style={{ position: 'absolute', inset: 0, opacity: stage === 'pull' ? 1 : 0, transition: 'opacity 1s ease', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 26 }}>
+        {/* Machine body */}
+        <div style={{ width: 108, height: 80, borderRadius: 10, position: 'relative',
+          background: 'linear-gradient(135deg,#8c8c8c 0%,#b0b0b0 28%,#9a9a9a 55%,#686868 100%)',
+          boxShadow: 'inset 0 2px 6px rgba(255,255,255,0.18), inset -5px 0 12px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.5)',
         }}>
-          {/* Surface sheen */}
-          <div style={{
-            position: 'absolute', top: 0, left: '10%', right: '10%', height: 4,
-            borderRadius: '50%',
-            background: 'rgba(255,210,140,0.22)',
-            animation: 'liquidSheen 2.5s ease-in-out infinite',
-          }} />
+          {/* Brand circle */}
+          <div style={{ position: 'absolute', top: 8, left: 10, width: 24, height: 24, borderRadius: '50%', background: '#333', border: '2px solid #555', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.2)' }} />
+          </div>
+          {/* Pressure gauge */}
+          <div style={{ position: 'absolute', top: 8, right: 10, width: 24, height: 24, borderRadius: '50%', background: '#2a2a2a', border: '2px solid #444', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', width: 16, height: 16, borderRadius: '50%' }}>
+              <div style={{ position: 'absolute', bottom: '50%', left: '50%', width: 1.5, height: 7, background: '#e53', borderRadius: 1, transformOrigin: 'bottom center', transform: `rotate(${-55 + sp * 110}deg)`, transition: 'transform 2s ease' }} />
+            </div>
+          </div>
+          {/* Status LEDs */}
+          <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 7 }}>
+            {[0,1,2].map(i => <div key={i} style={{ width: 9, height: 9, borderRadius: '50%', background: i===1 && sp>0.25 ? '#4ade80' : '#383838', border: '1px solid #2a2a2a', transition: 'background 1s ease', boxShadow: i===1 && sp>0.25 ? '0 0 6px #4ade80' : 'none' }} />)}
+          </div>
+          {/* Group head */}
+          <div style={{ position: 'absolute', bottom: -13, left: '50%', transform: 'translateX(-50%)', width: 38, height: 13, borderRadius: '0 0 5px 5px', background: 'linear-gradient(180deg,#545454 0%,#424242 100%)', boxShadow: '0 4px 8px rgba(0,0,0,0.45)' }} />
+          {/* Portafilter */}
+          <div style={{ position: 'absolute', bottom: -9, left: 'calc(50% + 12px)', width: 52, height: 6, borderRadius: 3, background: 'linear-gradient(90deg,#3a2010 0%,#5a3020 100%)', transform: 'rotate(-7deg)', transformOrigin: 'left center' }} />
+        </div>
+        {/* Espresso stream */}
+        <div style={{ width: 3, borderRadius: 2, height: `${sp * 50}px`, background: 'linear-gradient(180deg,#3d1800,#8a4010,#3d1800)', transition: 'height 2.5s ease', boxShadow: '0 0 5px rgba(130,60,10,0.5)' }} />
+        {/* Shot glass */}
+        <div style={{ position: 'relative', width: 28, height: 24, borderRadius: '2px 2px 4px 4px', border: '1px solid rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.04)', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${sp * 82}%`, background: 'linear-gradient(180deg,#c06828 0%,#5a1e00 100%)', transition: 'height 2.5s ease' }}>
+            <div style={{ position: 'absolute', top: 0, left: '8%', right: '8%', height: 2, background: 'rgba(230,160,60,0.45)', borderRadius: '50%', animation: 'sheen 2s ease-in-out infinite' }} />
+          </div>
+        </div>
+        <div style={{ width: 58, height: 5, background: '#222', borderRadius: 2, marginTop: 2 }} />
+      </div>
+
+      {/* ── STAGE 2: Steam ── */}
+      <div style={{ position: 'absolute', inset: 0, opacity: stage === 'steam' ? 1 : 0, transition: 'opacity 1s ease', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 14 }}>
+        <div style={{ position: 'relative' }}>
+          {/* Steam wand */}
+          <div style={{ position: 'absolute', left: -10, bottom: 52, width: 7, height: 68, background: 'linear-gradient(90deg,#aaa,#d0d0d0,#aaa)', borderRadius: 3, boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+            <div style={{ position: 'absolute', bottom: -5, left: -3, width: 13, height: 8, borderRadius: 4, background: '#999' }} />
+            {sp > 0.08 && [0,1,2].map(i => (
+              <div key={i} style={{ position: 'absolute', bottom: 4, left: 2, width: 2, height: 20, borderRadius: 2, background: 'rgba(255,255,255,0.38)', filter: 'blur(1px)', animation: `steamWaft ${1.5+i*0.35}s ease-out infinite`, animationDelay: `${i*0.45}s` }} />
+            ))}
+          </div>
+          {/* Jug */}
+          <div style={{ width: 66, height: 88, borderRadius: '7px 13px 5px 5px', position: 'relative',
+            background: 'linear-gradient(135deg,#c4c4c4 0%,#e4e4e4 28%,#cecece 58%,#a8a8a8 100%)',
+            boxShadow: 'inset -5px 0 10px rgba(0,0,0,0.13), 0 4px 14px rgba(0,0,0,0.45)',
+            overflow: 'hidden',
+          }}>
+            <div style={{ position: 'absolute', top: 7, left: 5, width: 9, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', transform: 'rotate(-14deg)' }} />
+            {/* Milk fill */}
+            <div style={{ position: 'absolute', bottom: 0, left: 2, right: 2, height: `${58 + sp*28}%`, background: 'rgba(255,252,244,0.9)', borderRadius: '0 0 3px 3px', transition: 'height 2s ease' }}>
+              {/* Foam */}
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${sp*22}px`, background: 'rgba(255,255,255,0.82)', borderRadius: '2px 2px 0 0', transition: 'height 2s ease', overflow: 'hidden' }}>
+                {sp > 0.3 && [3,13,24,8,18].map((x,i) => <div key={i} style={{ position: 'absolute', left: x, top: 2+(i%2)*3, width: 3, height: 3, borderRadius: '50%', background: 'rgba(210,200,188,0.65)' }} />)}
+              </div>
+            </div>
+          </div>
+          {/* Handle */}
+          <div style={{ position: 'absolute', right: -13, bottom: 18, width: 15, height: 30, border: '4px solid #b4b4b4', borderLeft: 'none', borderRadius: '0 9px 9px 0' }} />
+          {/* Bubbles */}
+          {sp > 0.12 && [0,1,2,3].map(i => (
+            <div key={i} style={{ position: 'absolute', bottom: `${14+(i*12)%42}px`, left: `${8+(i*16)%50}px`, width: i%2===0?4:3, height: i%2===0?4:3, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.5)', animation: `bubble ${1.3+i*0.4}s ease-out infinite`, animationDelay: `${i*0.38}s` }} />
+          ))}
         </div>
       </div>
 
-      {/* Handle */}
-      <div style={{
-        position: 'absolute', bottom: 40,
-        left: `calc(50% + 32px)`,
-        width: 22, height: 36,
-        border: '6px solid #8a5848',
-        borderLeft: 'none',
-        borderRadius: '0 16px 16px 0',
-        boxShadow: 'inset -2px 0 4px rgba(0,0,0,0.2)',
-      }} />
-
-      {/* Steam wisps */}
-      {[0,1,2,3].map(i => (
-        <div key={i} style={{
-          position: 'absolute',
-          bottom: 96,
-          left: `calc(50% + ${(i - 1.5) * 13}px)`,
-          width: i % 2 === 0 ? 2 : 3,
-          height: i % 2 === 0 ? 36 : 28,
-          borderRadius: 6,
-          background: 'rgba(255,255,255,0.55)',
-          filter: 'blur(1.5px)',
-          opacity: steamOpacity,
-          animation: `sw${i} ${2.2 + i * 0.4}s ease-out infinite`,
-          animationDelay: `${i * 0.55}s`,
-        }} />
-      ))}
+      {/* ── STAGE 3: Pour ── */}
+      <div style={{ position: 'absolute', inset: 0, opacity: stage === 'pour' ? 1 : 0, transition: 'opacity 1s ease', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 10 }}>
+        <div style={{ position: 'relative', width: 184, height: 155 }}>
+          {/* Cup + saucer */}
+          <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)' }}>
+            <div style={{ width: 98, height: 10, borderRadius: '50%', background: 'linear-gradient(180deg,#ddd 0%,#bbb 100%)', marginBottom: -1, boxShadow: '0 4px 10px rgba(0,0,0,0.35)' }} />
+            <div style={{ width: 78, height: 56, marginLeft: 10, borderRadius: '4px 4px 16px 16px', position: 'relative', overflow: 'hidden',
+              background: 'linear-gradient(135deg,#f4f3f0 0%,#e8e6e0 40%,#f0ede8 100%)',
+              boxShadow: 'inset -4px 0 9px rgba(0,0,0,0.09), 0 2px 8px rgba(0,0,0,0.3)',
+            }}>
+              {/* Espresso layer */}
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '34%', background: 'linear-gradient(180deg,#8b4010 0%,#3d1600 100%)' }} />
+              {/* Milk pour */}
+              <div style={{ position: 'absolute', bottom: '30%', left: 0, right: 0, height: `${sp*44}%`, background: 'linear-gradient(180deg,rgba(255,248,234,0.95) 0%,rgba(235,220,192,0.88) 100%)', transition: 'height 2s ease', overflow: 'hidden' }}>
+                {/* Latte art leaf */}
+                {sp > 0.48 && (
+                  <div style={{ position: 'absolute', top: '8%', left: '50%', transform: 'translateX(-50%)', width: 44, height: 28, opacity: Math.min(1,(sp-0.48)*5), transition: 'opacity 1s ease' }}>
+                    {[0,1,2,3,4].map(i => <div key={i} style={{ position: 'absolute', top: `${18+i*13}%`, left: `${14+Math.abs(i-2)*12}%`, width: `${42-Math.abs(i-2)*10}%`, height: 2.5, borderRadius: 2, background: 'rgba(110,65,25,0.32)', transform: `rotate(${(i-2)*7}deg)` }} />)}
+                    <div style={{ position: 'absolute', top: '8%', left: '50%', transform: 'translateX(-50%)', width: 1.5, height: '82%', background: 'rgba(110,65,25,0.38)', borderRadius: 1 }} />
+                  </div>
+                )}
+                <div style={{ position: 'absolute', top: 0, left: '12%', right: '12%', height: 3, borderRadius: '50%', background: 'rgba(255,240,200,0.48)', animation: 'sheen 2.2s ease-in-out infinite' }} />
+              </div>
+            </div>
+            <div style={{ position: 'absolute', right: 4, bottom: 11, width: 15, height: 24, border: '3px solid #ddd', borderLeft: 'none', borderRadius: '0 9px 9px 0' }} />
+          </div>
+          {/* Pour stream */}
+          {sp < 0.94 && (
+            <div style={{ position: 'absolute', top: 12, left: '68%', width: 3, height: `${28+sp*28}px`, background: 'linear-gradient(180deg,rgba(242,232,212,0.9),rgba(220,200,168,0.7))', borderRadius: 2, transform: 'rotate(11deg)', transformOrigin: 'top center', animation: 'pourWiggle 0.45s ease-in-out infinite', boxShadow: '0 0 5px rgba(220,200,168,0.4)' }} />
+          )}
+          {/* Tilted jug */}
+          <div style={{ position: 'absolute', top: 0, right: 0, width: 50, height: 65,
+            background: 'linear-gradient(135deg,#c6c6c6 0%,#dedede 32%,#bfbfbf 100%)',
+            borderRadius: '5px 11px 4px 4px',
+            boxShadow: 'inset -4px 0 8px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.35)',
+            transform: `rotate(${-22-sp*10}deg)`, transformOrigin: 'bottom left', transition: 'transform 2s ease',
+            overflow: 'hidden',
+          }}>
+            <div style={{ position: 'absolute', bottom: 3, left: 3, right: 3, height: `${(1-sp)*58+4}%`, background: 'rgba(255,252,244,0.82)', borderRadius: '0 0 2px 2px', transition: 'height 2s ease' }} />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -465,6 +494,20 @@ function ButterflyScene({ progress }: { progress: number }) {
   )
 }
 
+// ── Cloud shape helper ────────────────────────────────────────
+function CloudBlob({ w, tint = 'rgba(255,255,255,0.9)' }: { w: number; tint?: string }) {
+  const h = Math.round(w * 0.36)
+  const s = (n: number) => Math.round(w * n)
+  return (
+    <div style={{ position: 'relative', display: 'inline-block', width: w, height: h + s(0.42), flexShrink: 0 }}>
+      <div style={{ position: 'absolute', bottom: 0, left: 0, width: w, height: h, borderRadius: h / 2, background: tint, filter: 'blur(1.5px)' }} />
+      <div style={{ position: 'absolute', bottom: h - s(0.1), left: s(0.06), width: s(0.36), height: s(0.36), borderRadius: '50%', background: tint, filter: 'blur(1px)' }} />
+      <div style={{ position: 'absolute', bottom: h - s(0.15), left: s(0.24), width: s(0.44), height: s(0.44), borderRadius: '50%', background: tint, filter: 'blur(0.5px)' }} />
+      <div style={{ position: 'absolute', bottom: h - s(0.08), left: s(0.58), width: s(0.3), height: s(0.3), borderRadius: '50%', background: tint, filter: 'blur(1px)' }} />
+    </div>
+  )
+}
+
 // ── Flight ────────────────────────────────────────────────────
 function skyColor(p: number): string {
   if (p < 15) {
@@ -504,306 +547,248 @@ function skyColor(p: number): string {
 }
 
 function FlightScene({ progress }: { progress: number }) {
-  const isNight = progress > 65
-  const isDusk  = progress > 55 && progress <= 85
-  const isDawn  = progress < 20
-  const planeX  = 8 + (progress / 100) * 62
-  const planeY  = 40 - Math.sin((progress / 100) * Math.PI * 1.5) * 14
+  const isNight = progress >= 75
+  const isDusk  = progress >= 58 && progress < 88
+  const isDawn  = progress < 18
+  const sky = skyColor(progress)
+  const cloudTint = isNight
+    ? 'rgba(130,145,180,0.22)'
+    : isDusk
+    ? 'rgba(255,170,90,0.75)'
+    : 'rgba(255,255,255,0.88)'
 
   return (
-    <div style={{ position: 'relative', height: 220, borderRadius: 18, overflow: 'hidden' }}>
+    <div style={{ position: 'relative', height: 220, borderRadius: 18, overflow: 'hidden', background: '#181820' }}>
       <style>{`
-        @keyframes cloud1{0%{transform:translateX(0)}100%{transform:translateX(-340px)}}
-        @keyframes cloud2{0%{transform:translateX(0)}100%{transform:translateX(-280px)}}
-        @keyframes cloud3{0%{transform:translateX(0)}100%{transform:translateX(-200px)}}
-        @keyframes starTwinkle{0%,100%{opacity:0.7}50%{opacity:0.2}}
-        @keyframes sunRise{0%{bottom:10px}100%{bottom:80px}}
+        @keyframes cl1{0%{transform:translateX(0)}100%{transform:translateX(-560px)}}
+        @keyframes cl2{0%{transform:translateX(0)}100%{transform:translateX(-460px)}}
+        @keyframes cl3{0%{transform:translateX(0)}100%{transform:translateX(-340px)}}
+        @keyframes twinkle{0%,100%{opacity:0.8}50%{opacity:0.18}}
+        @keyframes glassShimmer{0%,100%{opacity:0.05}50%{opacity:0.12}}
       `}</style>
 
-      {/* Sky */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: skyColor(progress),
-        transition: 'background 8s ease',
-      }} />
+      {/* Cabin wall vignette */}
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(10,10,16,0.82) 100%)', zIndex: 4, pointerEvents: 'none' }} />
 
-      {/* Stars (night only) */}
-      {isNight && [
-        [12,8],[28,15],[45,6],[60,18],[75,10],[88,5],[20,22],[55,12],[80,20],[35,4],
-        [65,26],[10,28],[42,18],[70,8],[85,24],[50,28],[15,14],[38,22],[72,14],[90,18],
-      ].map(([x,y],i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          left: `${x}%`, top: `${y}%`,
-          width: i % 3 === 0 ? 2 : 1.5, height: i % 3 === 0 ? 2 : 1.5,
-          borderRadius: '50%', background: 'white',
-          opacity: Math.min(1, (progress - 65) / 20) * (0.4 + (i % 3) * 0.2),
-          animation: `starTwinkle ${2 + (i % 4) * 0.8}s ease-in-out infinite`,
-          animationDelay: `${(i * 0.37) % 3}s`,
+      {/* Porthole frame */}
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+        width: 258, height: 192, borderRadius: '50%', zIndex: 3,
+        border: '16px solid rgba(38,38,44,0.97)',
+        boxShadow: 'inset 0 0 0 3px rgba(255,255,255,0.07), inset 0 6px 20px rgba(0,0,0,0.7), 0 0 0 3px rgba(22,22,28,0.9), 0 8px 30px rgba(0,0,0,0.8)',
+        overflow: 'hidden',
+      }}>
+        {/* Sky */}
+        <div style={{ position: 'absolute', inset: 0, background: sky, transition: 'background 7s ease' }} />
+
+        {/* Horizon glow */}
+        {(isDawn || isDusk) && (
+          <div style={{
+            position: 'absolute', bottom: '22%', left: 0, right: 0, height: 48,
+            background: `linear-gradient(180deg, transparent, ${isDusk ? 'rgba(255,110,30,0.45)' : 'rgba(255,160,60,0.38)'})`,
+            filter: 'blur(10px)',
+          }} />
+        )}
+
+        {/* Stars */}
+        {isNight && [
+          [12,8],[32,13],[50,5],[67,17],[82,8],[90,22],[24,20],[57,11],[76,5],[40,16],[18,28],[62,24],
+        ].map(([x,y],i) => (
+          <div key={i} style={{
+            position: 'absolute', left: `${x}%`, top: `${y}%`,
+            width: i%3===0?2:1.5, height: i%3===0?2:1.5, borderRadius: '50%', background: 'white',
+            opacity: Math.min(1,(progress-75)/16)*0.75,
+            animation: `twinkle ${2.2+(i%4)*0.7}s ease-in-out infinite`,
+            animationDelay: `${(i*0.38)%2.8}s`,
+          }} />
+        ))}
+
+        {/* Moon */}
+        {isNight && (
+          <div style={{
+            position: 'absolute', top: '8%', right: '16%',
+            width: 22, height: 22, borderRadius: '50%',
+            background: 'radial-gradient(circle at 38% 38%,#f0e8ce,#c8bc90)',
+            boxShadow: '0 0 14px rgba(240,230,180,0.4)',
+            opacity: Math.min(1,(progress-75)/14),
+          }} />
+        )}
+
+        {/* Sun */}
+        {!isNight && (
+          <div style={{
+            position: 'absolute',
+            left: `${isDawn ? 18 : 12 + progress*0.48}%`,
+            top: isDawn ? `${52-(progress/18)*34}%` : `${Math.max(4,22-(progress-18)*0.28)}%`,
+            width: isDawn?16:20, height: isDawn?16:20, borderRadius: '50%',
+            background: isDawn
+              ? 'radial-gradient(circle,#ff9040,#ff5500)'
+              : 'radial-gradient(circle,#fffaaa,#ffd020)',
+            boxShadow: isDawn
+              ? '0 0 18px rgba(255,130,40,0.7)'
+              : '0 0 22px rgba(255,210,30,0.55)',
+            opacity: isDawn ? Math.min(1,progress/14) : 1,
+            transition: 'left 8s ease, top 8s ease',
+          }} />
+        )}
+
+        {/* Cloud layer 3 — far, slow */}
+        <div style={{ position: 'absolute', top: '16%', display: 'flex', gap: 28, animation: 'cl3 75s linear infinite', opacity: isNight?0.09:isDusk?0.52:0.24 }}>
+          {[48,40,56,44,50,46,52,42,54].map((w,i) => <CloudBlob key={i} w={w} tint={cloudTint} />)}
+        </div>
+
+        {/* Cloud layer 2 — mid */}
+        <div style={{ position: 'absolute', top: '36%', display: 'flex', gap: 18, animation: 'cl2 46s linear infinite', opacity: isNight?0.06:isDusk?0.62:0.32 }}>
+          {[68,54,80,60,72,58,76,64,70].map((w,i) => <CloudBlob key={i} w={w} tint={cloudTint} />)}
+        </div>
+
+        {/* Cloud layer 1 — near, fast */}
+        <div style={{ position: 'absolute', top: '54%', display: 'flex', gap: 14, animation: 'cl1 26s linear infinite', opacity: isNight?0.04:isDusk?0.48:0.18 }}>
+          {[88,70,100,78,92,74,96,82,86].map((w,i) => <CloudBlob key={i} w={w} tint={cloudTint} />)}
+        </div>
+
+        {/* Glass reflection shimmer */}
+        <div style={{
+          position: 'absolute', top: '-15%', left: '-8%',
+          width: '38%', height: '65%', borderRadius: '50%',
+          background: 'rgba(255,255,255,0.04)',
+          transform: 'rotate(-22deg)',
+          animation: 'glassShimmer 7s ease-in-out infinite',
+          pointerEvents: 'none',
         }} />
-      ))}
 
-      {/* Sun / Moon */}
-      {!isNight && (
+        {/* Wing tip */}
         <div style={{
-          position: 'absolute',
-          left: `${10 + progress * 0.6}%`,
-          bottom: isDawn ? `${10 + progress * 0.8}%` : `${Math.max(10, 60 - (progress - 20) * 1.2)}%`,
-          fontSize: 18,
-          transition: 'left 6s ease, bottom 6s ease',
-          filter: 'drop-shadow(0 0 8px rgba(255,220,80,0.7))',
-          opacity: isDawn ? progress / 25 : 1,
-        }}>☀️</div>
-      )}
-      {isNight && (
-        <div style={{
-          position: 'absolute', left: '75%', top: '12%',
-          fontSize: 16,
-          filter: 'drop-shadow(0 0 6px rgba(200,220,255,0.5))',
-          opacity: Math.min(1, (progress - 65) / 15),
-        }}>🌙</div>
-      )}
+          position: 'absolute', bottom: '4%', right: '6%',
+          width: 68, height: 18,
+          background: 'linear-gradient(135deg,rgba(195,200,212,0.82) 0%,rgba(155,162,178,0.65) 100%)',
+          borderRadius: '5px 2px 10px 2px',
+          boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.12), 0 2px 8px rgba(0,0,0,0.3)',
+          transform: 'perspective(50px) rotateX(10deg)',
+        }} />
 
-      {/* Cloud layer 3 — far, small, slow */}
-      <div style={{
-        position: 'absolute', top: '18%',
-        animation: 'cloud3 90s linear infinite',
-        whiteSpace: 'nowrap',
-        opacity: isDusk ? 0.5 : isNight ? 0.12 : 0.22,
-      }}>
-        {['340px','520px','700px','920px'].map((l,i) => (
-          <div key={i} style={{
-            position: 'absolute', left: l,
-            width: 50 + i * 10, height: 16,
-            borderRadius: 12,
-            background: 'rgba(255,255,255,0.7)',
-            filter: 'blur(4px)',
-          }} />
-        ))}
+        {/* Progress text */}
+        <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', fontSize: 10, color: 'rgba(255,255,255,0.35)', whiteSpace: 'nowrap' }}>
+          {Math.round(progress)}% of journey
+        </div>
       </div>
-
-      {/* Cloud layer 2 — mid */}
-      <div style={{
-        position: 'absolute', top: '34%',
-        animation: 'cloud2 55s linear infinite',
-        whiteSpace: 'nowrap',
-        opacity: isDusk ? 0.55 : isNight ? 0.08 : 0.3,
-      }}>
-        {['80px','300px','560px','780px'].map((l,i) => (
-          <div key={i} style={{
-            position: 'absolute', left: l,
-            width: 65 + i * 12, height: 20,
-            borderRadius: 14,
-            background: isDusk ? 'rgba(255,180,100,0.8)' : 'rgba(255,255,255,0.85)',
-            filter: 'blur(3px)',
-          }} />
-        ))}
-      </div>
-
-      {/* Cloud layer 1 — near, large, fast */}
-      <div style={{
-        position: 'absolute', top: '52%',
-        animation: 'cloud1 30s linear infinite',
-        whiteSpace: 'nowrap',
-        opacity: isDusk ? 0.5 : isNight ? 0.05 : 0.18,
-      }}>
-        {['40px','220px','480px','700px'].map((l,i) => (
-          <div key={i} style={{
-            position: 'absolute', left: l,
-            width: 80 + i * 18, height: 28,
-            borderRadius: 18,
-            background: isDusk ? 'rgba(255,140,60,0.7)' : 'rgba(255,255,255,0.9)',
-            filter: 'blur(2px)',
-          }} />
-        ))}
-      </div>
-
-      {/* Contrail */}
-      <div style={{
-        position: 'absolute',
-        top: `${planeY + 8}%`,
-        left: '6%',
-        width: `${planeX - 8}%`,
-        height: 2,
-        background: `linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.06) 20%, rgba(255,255,255,${isNight ? 0.18 : 0.28}) 100%)`,
-        borderRadius: 1,
-        transition: 'width 2s ease, top 2s ease',
-      }} />
-
-      {/* Plane */}
-      <div style={{
-        position: 'absolute',
-        left: `${planeX}%`,
-        top: `${planeY}%`,
-        fontSize: 28,
-        transform: 'scaleX(-1)',
-        transition: 'left 2.5s ease, top 2s ease',
-        filter: `drop-shadow(0 2px 6px rgba(0,0,0,0.4))`,
-        zIndex: 2,
-      }}>✈️</div>
-
-      {/* Progress label */}
-      <div style={{
-        position: 'absolute', bottom: 10, right: 14,
-        fontSize: 10, color: 'rgba(255,255,255,0.4)',
-        fontVariantNumeric: 'tabular-nums',
-      }}>{Math.round(progress)}% of journey</div>
-
-      {/* Bottom wing tip */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 22,
-        background: 'linear-gradient(180deg,rgba(150,160,180,0.12) 0%,rgba(100,110,130,0.22) 100%)',
-        borderRadius: '60% 60% 0 0',
-        filter: 'blur(1px)',
-      }} />
     </div>
   )
 }
 
 // ── Candle ────────────────────────────────────────────────────
 function CandleScene({ progress }: { progress: number }) {
-  const candleH = Math.round(95 - progress * 0.45)
-  const wickBottom = candleH + 2
-  const flameBottom = wickBottom + 8
+  const candleH = Math.round(100 - progress * 0.5)  // 100 → 50px as session runs
 
   return (
     <div style={{ position: 'relative', height: 220, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <style>{`
-        @keyframes outerFlame{0%,100%{transform:scaleX(1) rotate(-1.5deg);opacity:1}
-          33%{transform:scaleX(0.82) rotate(2deg) scaleY(1.06);opacity:0.9}
-          66%{transform:scaleX(1.12) rotate(-1deg) scaleY(0.95);opacity:0.95}}
-        @keyframes innerFlame{0%,100%{transform:scaleX(0.9) rotate(1deg)}
-          50%{transform:scaleX(0.7) rotate(-1.5deg) scaleY(1.08)}}
-        @keyframes coreFlame{0%,100%{opacity:0.9}50%{opacity:0.7}}
-        @keyframes waxDrip{0%{height:0;opacity:0.9}80%{height:26px;opacity:0.8}100%{height:28px;opacity:0}}
-        @keyframes candleGlow{0%,100%{opacity:0.55;transform:scale(1)}
-          33%{opacity:0.8;transform:scale(1.06)}
-          66%{opacity:0.65;transform:scale(0.97)}}
-        @keyframes wallGlow{0%,100%{opacity:0.4}50%{opacity:0.65}}
+        @keyframes outerFlame{
+          0%,100%{transform:scaleX(1) rotate(-1.5deg);opacity:1}
+          33%{transform:scaleX(0.8) rotate(2.5deg) scaleY(1.08);opacity:0.9}
+          66%{transform:scaleX(1.12) rotate(-1deg) scaleY(0.94);opacity:0.95}}
+        @keyframes innerFlame{
+          0%,100%{transform:scaleX(0.88) rotate(1deg)}
+          50%{transform:scaleX(0.65) rotate(-2deg) scaleY(1.1)}}
+        @keyframes coreFlame{0%,100%{opacity:0.95;transform:scaleY(1)}50%{opacity:0.72;transform:scaleY(1.06)}}
+        @keyframes waxDrip1{0%{height:0;opacity:0.9}75%{height:22px;opacity:0.8}100%{height:24px;opacity:0.1}}
+        @keyframes waxDrip2{0%{height:0;opacity:0.8}80%{height:16px;opacity:0.7}100%{height:18px;opacity:0.1}}
+        @keyframes candleGlow{0%,100%{opacity:0.52;transform:scale(1)}35%{opacity:0.88;transform:scale(1.1)}70%{opacity:0.62;transform:scale(0.95)}}
+        @keyframes wallGlow{0%,100%{opacity:0.35}50%{opacity:0.6}}
       `}</style>
 
-      {/* Wall glow */}
+      {/* Wide wall glow */}
       <div style={{
-        position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-        width: 220, height: 180,
-        background: `radial-gradient(ellipse at 50% 70%, rgba(251,146,60,${0.12 + progress * 0.001}) 0%, transparent 65%)`,
-        animation: 'wallGlow 2.2s ease-in-out infinite',
-        filter: 'blur(20px)',
+        position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+        width: 210, height: 170,
+        background: `radial-gradient(ellipse at 50% 80%, rgba(251,146,60,${0.13 + progress * 0.001}) 0%, transparent 65%)`,
+        animation: 'wallGlow 2.5s ease-in-out infinite',
+        filter: 'blur(22px)',
         pointerEvents: 'none',
       }} />
 
-      {/* Candle holder / plate */}
+      {/* Holder plate */}
       <div style={{
         position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%)',
-        width: 70, height: 10, borderRadius: '50%',
-        background: 'linear-gradient(180deg,#6b5040 0%,#4a3020 100%)',
+        width: 72, height: 10, borderRadius: '50%',
+        background: 'linear-gradient(180deg,#7a6050 0%,#4a3020 100%)',
         boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
       }} />
 
-      {/* Melted wax pool */}
+      {/* Wax pool */}
       <div style={{
-        position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
-        width: Math.min(52, 32 + progress * 0.2), height: 8,
-        borderRadius: '50%',
-        background: 'rgba(240,230,210,0.55)',
-        transition: 'width 8s ease',
-        filter: 'blur(1px)',
+        position: 'absolute', bottom: 7, left: '50%', transform: 'translateX(-50%)',
+        width: Math.min(58, 28 + progress * 0.3), height: 7, borderRadius: '50%',
+        background: 'rgba(245,235,215,0.52)', filter: 'blur(1px)',
+        transition: 'width 12s ease',
       }} />
 
-      {/* Candle body */}
+      {/* Candle body — flame lives inside as overflow:visible children */}
       <div style={{
         position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
         width: 30, height: candleH,
-        background: 'linear-gradient(90deg,rgba(255,252,245,0.9) 0%,rgba(245,240,225,0.95) 40%,rgba(230,222,205,0.9) 70%,rgba(245,240,225,0.9) 100%)',
+        background: 'linear-gradient(90deg,rgba(255,252,245,0.92) 0%,rgba(246,241,228,0.96) 45%,rgba(230,222,205,0.9) 75%,rgba(246,241,226,0.92) 100%)',
         borderRadius: '3px 3px 2px 2px',
-        transition: 'height 12s linear',
-        boxShadow: 'inset -4px 0 8px rgba(0,0,0,0.08), 2px 0 6px rgba(0,0,0,0.15)',
+        transition: 'height 15s linear',
+        boxShadow: 'inset -4px 0 8px rgba(0,0,0,0.07), 2px 0 6px rgba(0,0,0,0.12)',
         overflow: 'visible',
       }}>
-        {/* Wax drip left */}
-        <div style={{
-          position: 'absolute', top: 0, left: 5,
-          width: 6, borderRadius: '0 0 4px 4px',
-          background: 'rgba(240,230,210,0.8)',
-          animation: 'waxDrip 8s ease-in-out infinite',
-          animationDelay: '1s',
-        }} />
-        {/* Wax drip right */}
-        <div style={{
-          position: 'absolute', top: 0, right: 7,
-          width: 5, borderRadius: '0 0 3px 3px',
-          background: 'rgba(240,230,210,0.8)',
-          animation: 'waxDrip 11s ease-in-out infinite',
-          animationDelay: '4s',
-        }} />
-        {/* Vertical groove lines */}
-        {[8, 16, 22].map(x => (
-          <div key={x} style={{
-            position: 'absolute', top: 0, bottom: 0, left: x,
-            width: 1,
-            background: 'rgba(0,0,0,0.04)',
-          }} />
+        {/* Groove lines */}
+        {[7, 15, 22].map(x => (
+          <div key={x} style={{ position: 'absolute', top: 0, bottom: 0, left: x, width: 1, background: 'rgba(0,0,0,0.04)' }} />
         ))}
+        {/* Wax drips */}
+        <div style={{ position: 'absolute', top: 0, left: 4, width: 7, borderRadius: '0 0 4px 4px', background: 'rgba(240,232,210,0.85)', animation: 'waxDrip1 9s ease-in-out infinite', animationDelay: '1.5s' }} />
+        <div style={{ position: 'absolute', top: 0, right: 6, width: 5, borderRadius: '0 0 3px 3px', background: 'rgba(240,232,210,0.8)', animation: 'waxDrip2 13s ease-in-out infinite', animationDelay: '5s' }} />
+
+        {/* Wick — sits above candle top */}
+        <div style={{
+          position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
+          width: 2, height: 10, borderRadius: 1,
+          background: 'linear-gradient(180deg,#666 0%,#222 100%)',
+          zIndex: 2,
+        }} />
+
+        {/* Glow halo */}
+        <div style={{
+          position: 'absolute', top: -56, left: '50%', transform: 'translateX(-50%)',
+          width: 76, height: 76, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(251,146,60,0.4) 0%, rgba(251,146,60,0.06) 55%, transparent 72%)',
+          animation: 'candleGlow 1.3s ease-in-out infinite',
+          filter: 'blur(6px)', zIndex: 1,
+        }} />
+
+        {/* Outer flame */}
+        <div style={{
+          position: 'absolute', top: -48, left: '50%', transform: 'translateX(-50%)',
+          width: 22, height: 36,
+          background: 'linear-gradient(180deg,#fecaca 0%,#fb923c 28%,#dc2626 72%,#7f1d1d 100%)',
+          borderRadius: '50% 50% 34% 34%',
+          animation: 'outerFlame 1s ease-in-out infinite',
+          transformOrigin: 'bottom center',
+          zIndex: 3, filter: 'blur(0.4px)',
+        }} />
+
+        {/* Inner flame */}
+        <div style={{
+          position: 'absolute', top: -42, left: '50%', transform: 'translateX(-50%)',
+          width: 13, height: 26,
+          background: 'linear-gradient(180deg,#fef3c7 0%,#fde68a 38%,#fb923c 100%)',
+          borderRadius: '50% 50% 32% 32%',
+          animation: 'innerFlame 0.72s ease-in-out infinite',
+          transformOrigin: 'bottom center', zIndex: 4,
+        }} />
+
+        {/* Core */}
+        <div style={{
+          position: 'absolute', top: -35, left: '50%', transform: 'translateX(-50%)',
+          width: 5, height: 13,
+          background: 'linear-gradient(180deg,#ffffff 0%,#fef9c3 100%)',
+          borderRadius: '50% 50% 30% 30%',
+          animation: 'coreFlame 0.5s ease-in-out infinite',
+          transformOrigin: 'bottom center', zIndex: 5,
+        }} />
       </div>
-
-      {/* Wick */}
-      <div style={{
-        position: 'absolute', bottom: wickBottom + 8, left: '50%', transform: 'translateX(-50%)',
-        width: 2, height: 10,
-        background: 'linear-gradient(180deg,#888 0%,#333 100%)',
-        borderRadius: 1,
-        transition: 'bottom 12s linear',
-        zIndex: 3,
-      }} />
-
-      {/* Proximity glow around flame */}
-      <div style={{
-        position: 'absolute', bottom: flameBottom + 8,
-        left: '50%', transform: 'translateX(-50%)',
-        width: 70, height: 70, borderRadius: '50%',
-        background: `radial-gradient(circle, rgba(251,146,60,0.35) 0%, rgba(251,146,60,0.08) 50%, transparent 70%)`,
-        animation: 'candleGlow 1.4s ease-in-out infinite',
-        filter: 'blur(6px)',
-        transition: 'bottom 12s linear',
-        zIndex: 2,
-      }} />
-
-      {/* Outer flame */}
-      <div style={{
-        position: 'absolute', bottom: flameBottom + 8,
-        left: '50%', transform: 'translateX(-50%)',
-        width: 20, height: 32,
-        background: 'linear-gradient(180deg,#fed7aa 0%,#fb923c 35%,#dc2626 80%,#7f1d1d 100%)',
-        borderRadius: '50% 50% 30% 30%',
-        animation: 'outerFlame 0.95s ease-in-out infinite',
-        transformOrigin: 'bottom center',
-        transition: 'bottom 12s linear',
-        zIndex: 4,
-        filter: 'blur(0.5px)',
-      }} />
-      {/* Inner flame */}
-      <div style={{
-        position: 'absolute', bottom: flameBottom + 14,
-        left: '50%', transform: 'translateX(-50%)',
-        width: 12, height: 22,
-        background: 'linear-gradient(180deg,#fef3c7 0%,#fde68a 40%,#fb923c 100%)',
-        borderRadius: '50% 50% 30% 30%',
-        animation: 'innerFlame 0.7s ease-in-out infinite',
-        transformOrigin: 'bottom center',
-        transition: 'bottom 12s linear',
-        zIndex: 5,
-      }} />
-      {/* Core */}
-      <div style={{
-        position: 'absolute', bottom: flameBottom + 18,
-        left: '50%', transform: 'translateX(-50%)',
-        width: 5, height: 10,
-        background: 'linear-gradient(180deg,#ffffff 0%,#fef9c3 100%)',
-        borderRadius: '50% 50% 30% 30%',
-        animation: 'coreFlame 0.5s ease-in-out infinite',
-        transition: 'bottom 12s linear',
-        zIndex: 6,
-      }} />
     </div>
   )
 }
