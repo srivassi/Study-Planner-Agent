@@ -172,18 +172,21 @@ def get_stats(user_id: str):
 
     total_focus_minutes = sum(s["duration_minutes"] for s in sessions)
 
-    # Streak calculation
+    # Streak calculation — consecutive days ending today or yesterday
     completed_dates = sorted(set(
         s["completed_at"][:10] for s in sessions if s.get("completed_at")
     ), reverse=True)
 
     streak = 0
-    check = date.today()
+    today = date.today()
+    # Allow streak to count if most recent session was today or yesterday
+    check = today if (completed_dates and _parse_date(completed_dates[0]) == today) else today - timedelta(days=1)
     for d_str in completed_dates:
-        if _parse_date(d_str) == check:
+        d = _parse_date(d_str)
+        if d == check:
             streak += 1
-            check = check.__class__.fromordinal(check.toordinal() - 1)
-        elif _parse_date(d_str) < check:
+            check = check - timedelta(days=1)
+        elif d < check:
             break
 
     # Weekly pomodoros (last 7 days)

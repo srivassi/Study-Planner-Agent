@@ -33,7 +33,7 @@ const SCENES = [
   { id: 'coffee',    label: 'Coffee',    icon: '☕' },
   { id: 'plant',     label: 'Plant',     icon: '🌱' },
   { id: 'butterfly', label: 'Butterfly', icon: '🦋' },
-  { id: 'flight',    label: 'Flight',    icon: '✈️' },
+  { id: 'mario',     label: 'Mario',     icon: '🍄' },
   { id: 'candle',    label: 'Candle',    icon: '🕯️' },
 ]
 
@@ -42,7 +42,7 @@ const SCENE_THEMES: Record<string, { bg: string; ring: [string, string] }> = {
   coffee:    { bg: 'linear-gradient(160deg,#1c0d05 0%,#2e1408 55%,#110700 100%)', ring: ['#f59e0b','#d97706'] },
   plant:     { bg: 'linear-gradient(160deg,#061209 0%,#0d2211 55%,#040e06 100%)', ring: ['#4ade80','#16a34a'] },
   butterfly: { bg: 'linear-gradient(160deg,#120828 0%,#200e42 55%,#090418 100%)', ring: ['#c084fc','#7c3aed'] },
-  flight:    { bg: 'linear-gradient(160deg,#030915 0%,#060f28 55%,#020610 100%)', ring: ['#60a5fa','#2563eb'] },
+  mario:     { bg: 'linear-gradient(160deg,#001a4d 0%,#002b80 55%,#001233 100%)', ring: ['#e8312a','#ffd700'] },
   candle:    { bg: 'linear-gradient(160deg,#1a0b00 0%,#2e1500 55%,#0e0700 100%)', ring: ['#fb923c','#ea580c'] },
 }
 
@@ -338,163 +338,384 @@ function PlantScene({ progress }: { progress: number }) {
 }
 
 // ── Butterfly ─────────────────────────────────────────────────
+// Butterfly: 5 stages — egg → hatching → caterpillar → cocoon → butterfly
 function ButterflyScene({ progress }: { progress: number }) {
-  const phase = progress < 33 ? 'egg' : progress < 67 ? 'cocoon' : 'butterfly'
-  const emergeProgress = phase === 'butterfly' ? (progress - 67) / 33 : 0
+  // 0-20: egg, 20-40: hatching, 40-60: caterpillar, 60-80: cocoon, 80-100: butterfly
+  const phase = progress < 20 ? 'egg' : progress < 40 ? 'hatching' : progress < 60 ? 'caterpillar' : progress < 80 ? 'cocoon' : 'butterfly'
+  const sp = phase === 'egg' ? progress / 20
+    : phase === 'hatching' ? (progress - 20) / 20
+    : phase === 'caterpillar' ? (progress - 40) / 20
+    : phase === 'cocoon' ? (progress - 60) / 20
+    : (progress - 80) / 20
+
+  const PHASE_LABELS: Record<string,string> = {
+    egg: '🥚 egg forming', hatching: '🐛 hatching', caterpillar: '🐛 growing',
+    cocoon: '🫘 transforming', butterfly: '🦋 emerged',
+  }
 
   return (
-    <div style={{ position: 'relative', height: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+    <div style={{ position: 'relative', height: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
       <style>{`
-        @keyframes eggWobble{0%,100%{transform:rotate(-2deg) scale(1)}50%{transform:rotate(2deg) scale(1.03)}}
-        @keyframes cocoonSway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
-        @keyframes wingFlap{0%,100%{transform:scaleX(1)}50%{transform:scaleX(0.55)}}
-        @keyframes wingFlapR{0%,100%{transform:scaleX(-1)}50%{transform:scaleX(-0.55)}}
-        @keyframes flyBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-        @keyframes sparkle{0%,100%{opacity:0;transform:scale(0)}40%{opacity:1;transform:scale(1)}80%{opacity:0;transform:scale(0.5)}}
-        @keyframes phaseLabel{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes bEggWobble{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg) scale(1.04)}}
+        @keyframes bEggCrack{0%,89%{opacity:0}90%,100%{opacity:1}}
+        @keyframes bCatWave{0%,100%{transform:scaleX(1) rotate(-1deg)}50%{transform:scaleX(1.04) rotate(1deg)}}
+        @keyframes bLegWiggle{0%,100%{transform:rotate(-15deg)}50%{transform:rotate(15deg)}}
+        @keyframes bCocoonSway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+        @keyframes bCocoonPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
+        @keyframes bWingFlap{0%,100%{transform:scaleX(1)}50%{transform:scaleX(0.45)}}
+        @keyframes bWingFlapR{0%,100%{transform:scaleX(-1)}50%{transform:scaleX(-0.45)}}
+        @keyframes bFlyBob{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-12px) rotate(1deg)}}
+        @keyframes bSparkle{0%,100%{opacity:0;transform:scale(0) rotate(0deg)}40%{opacity:1;transform:scale(1) rotate(180deg)}80%{opacity:0}}
+        @keyframes bPhaseIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes bGlow{0%,100%{opacity:0.4}50%{opacity:0.85}}
+        @keyframes bCaterpillarWalk{0%{transform:translateX(0) scaleY(1)}25%{transform:translateX(4px) scaleY(0.94)}50%{transform:translateX(6px) scaleY(1.04)}75%{transform:translateX(4px) scaleY(0.96)}100%{transform:translateX(0) scaleY(1)}}
       `}</style>
 
       {/* Phase label */}
-      <div key={phase} style={{
-        fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase',
-        color: 'rgba(255,255,255,0.45)',
-        animation: 'phaseLabel 0.5s ease forwards',
-      }}>
-        {phase === 'egg' ? '🥚 forming...' : phase === 'cocoon' ? '🫘 transforming...' : '🦋 emerged'}
+      <div key={phase} style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)', animation: 'bPhaseIn 0.5s ease forwards' }}>
+        {PHASE_LABELS[phase]}
       </div>
 
-      {/* Main visual */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 110 }}>
+      {/* Main visual area */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, width: '100%' }}>
+
+        {/* ── EGG ── */}
         {phase === 'egg' && (
-          <div style={{
-            width: 44, height: 56,
-            background: 'radial-gradient(ellipse at 35% 30%, #f8f4ee 0%, #ddd8cc 60%, #b8b0a0 100%)',
-            borderRadius: '50% 50% 48% 48%',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 2px 2px 6px rgba(255,255,255,0.3)',
-            animation: 'eggWobble 3s ease-in-out infinite',
-          }} />
-        )}
-
-        {phase === 'cocoon' && (
-          <>
-            {/* Branch */}
-            <div style={{
-              position: 'absolute', top: 0,
-              width: 80, height: 6,
-              background: 'linear-gradient(90deg,#5a3820 0%,#7a5030 50%,#5a3820 100%)',
-              borderRadius: 3,
-              boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
-            }} />
-            {/* Silk thread */}
-            <div style={{
-              position: 'absolute', top: 6, left: '50%',
-              width: 1, height: 18,
-              background: 'rgba(220,200,180,0.5)',
-            }} />
-            {/* Cocoon */}
-            <div style={{
-              marginTop: 24,
-              width: 32, height: 58,
-              background: 'linear-gradient(160deg,#c8b898 0%,#a89878 40%,#887858 100%)',
-              borderRadius: '40% 40% 50% 50%',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.5), inset -4px 0 10px rgba(0,0,0,0.2)',
-              animation: 'cocoonSway 3s ease-in-out infinite',
-              transformOrigin: 'top center',
-              position: 'relative', overflow: 'hidden',
+          <div style={{ position: 'relative' }}>
+            {/* Leaf */}
+            <div style={{ position: 'absolute', bottom: -8, left: -18, width: 70, height: 22, borderRadius: '0 50% 50% 50%', background: 'linear-gradient(135deg,#4caf50,#2e7d32)', transform: 'rotate(-8deg)', zIndex: 0 }} />
+            <div style={{ position: 'relative', zIndex: 1,
+              width: 38 + sp * 6, height: 50 + sp * 6,
+              background: `radial-gradient(ellipse at 32% 28%, rgba(255,255,255,0.4) 0%, #e8e0d0 35%, #c8bca8 80%, #a89880 100%)`,
+              borderRadius: '48% 48% 46% 46%',
+              boxShadow: `0 4px 18px rgba(0,0,0,0.35), inset 2px 2px 5px rgba(255,255,255,0.35)`,
+              animation: 'bEggWobble 3.5s ease-in-out infinite',
+              transition: 'width 4s ease, height 4s ease',
             }}>
-              {/* Silk lines */}
-              {[0,1,2,3,4].map(i => (
-                <div key={i} style={{
-                  position: 'absolute',
-                  top: `${10 + i * 14}%`, left: '5%', right: '5%',
-                  height: 1,
-                  background: 'rgba(255,245,230,0.3)',
-                  borderRadius: 1,
-                }} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {phase === 'butterfly' && (
-          <div style={{
-            display: 'flex', alignItems: 'center',
-            animation: 'flyBob 2.4s ease-in-out infinite',
-            opacity: Math.min(1, emergeProgress * 3),
-            transition: 'opacity 1s ease',
-          }}>
-            {/* Left wing */}
-            <div style={{
-              width: 52, height: 48,
-              background: 'linear-gradient(135deg,#f97316 0%,#dc2626 40%,#1d4ed8 80%,#1d4ed8 100%)',
-              borderRadius: '80% 20% 60% 40%',
-              transformOrigin: 'right center',
-              animation: 'wingFlap 0.9s ease-in-out infinite',
-              filter: `drop-shadow(0 0 ${8 + emergeProgress * 6}px rgba(249,115,22,0.5))`,
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', top: '20%', left: '20%',
-                width: '50%', height: '50%',
-                borderRadius: '50%',
-                background: 'rgba(255,220,100,0.35)',
-              }} />
-            </div>
-            {/* Body */}
-            <div style={{
-              width: 10, height: 44, zIndex: 1,
-              background: 'linear-gradient(180deg,#1a1a1a 0%,#333 50%,#1a1a1a 100%)',
-              borderRadius: 5,
-              boxShadow: '0 0 8px rgba(0,0,0,0.6)',
-            }} />
-            {/* Right wing */}
-            <div style={{
-              width: 52, height: 48,
-              background: 'linear-gradient(225deg,#f97316 0%,#dc2626 40%,#1d4ed8 80%,#1d4ed8 100%)',
-              borderRadius: '20% 80% 40% 60%',
-              transformOrigin: 'left center',
-              animation: 'wingFlapR 0.9s ease-in-out infinite',
-              filter: `drop-shadow(0 0 ${8 + emergeProgress * 6}px rgba(249,115,22,0.5))`,
-              position: 'relative', overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', top: '20%', right: '20%',
-                width: '50%', height: '50%',
-                borderRadius: '50%',
-                background: 'rgba(255,220,100,0.35)',
-              }} />
+              {/* Subtle surface texture lines */}
+              {[0,1,2].map(i => <div key={i} style={{ position:'absolute', top:`${22+i*15}%`, left:'15%', right:'15%', height:1, background:'rgba(160,148,130,0.3)', borderRadius:1 }} />)}
             </div>
           </div>
         )}
 
-        {/* Emergence sparkles */}
-        {phase === 'butterfly' && emergeProgress < 0.6 && [0,1,2,3,4,5].map(i => (
-          <div key={i} style={{
-            position: 'absolute',
-            top: `${20 + (i * 23) % 60}%`,
-            left: `${10 + (i * 31) % 80}%`,
-            width: 4, height: 4, borderRadius: '50%',
-            background: ['#f97316','#fbbf24','#c084fc','#60a5fa','#f43f5e','#a3e635'][i],
-            animation: `sparkle ${1 + i * 0.3}s ease-in-out infinite`,
-            animationDelay: `${i * 0.2}s`,
-          }} />
-        ))}
+        {/* ── HATCHING ── */}
+        {phase === 'hatching' && (
+          <div style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', bottom: -8, left: -18, width: 70, height: 22, borderRadius: '0 50% 50% 50%', background: 'linear-gradient(135deg,#4caf50,#2e7d32)', transform: 'rotate(-8deg)' }} />
+            {/* Cracked egg */}
+            <div style={{ position: 'relative', width: 44, height: 56,
+              background: 'radial-gradient(ellipse at 32% 28%, rgba(255,255,255,0.3) 0%, #d8cfc0 40%, #b8a890 100%)',
+              borderRadius: '48% 48% 46% 46%',
+              boxShadow: '0 4px 18px rgba(0,0,0,0.35)',
+              animation: 'bEggWobble 1.2s ease-in-out infinite',
+              overflow: 'hidden',
+            }}>
+              {/* Crack lines */}
+              <div style={{ position:'absolute', top:`${28+sp*20}%`, left:'35%', width:2, height:`${sp*35}%`, background:'rgba(80,60,40,0.6)', transform:'rotate(12deg)', borderRadius:1, transition:'height 1s ease, top 1s ease' }} />
+              <div style={{ position:'absolute', top:`${32+sp*15}%`, left:'50%', width:1.5, height:`${sp*25}%`, background:'rgba(80,60,40,0.5)', transform:'rotate(-8deg)', borderRadius:1, transition:'height 1s ease' }} />
+              <div style={{ position:'absolute', top:`${35+sp*10}%`, left:'42%', width:1.5, height:`${sp*20}%`, background:'rgba(80,60,40,0.45)', transform:'rotate(25deg)', borderRadius:1, transition:'height 1s ease' }} />
+              {/* Caterpillar peeking out when sp > 0.5 */}
+              {sp > 0.5 && (
+                <div style={{ position:'absolute', bottom:0, left:'50%', transform:'translateX(-50%)',
+                  width:18, height:`${(sp-0.5)*2*24}px`,
+                  background:'linear-gradient(180deg,#7ac74f,#5a9e30)',
+                  borderRadius:'50% 50% 0 0',
+                  opacity: Math.min(1,(sp-0.5)*3),
+                  transition:'height 1s ease',
+                  boxShadow:'inset -2px 0 4px rgba(0,0,0,0.15)',
+                }} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── CATERPILLAR ── */}
+        {phase === 'caterpillar' && (
+          <div style={{ position: 'relative', animation: 'bCaterpillarWalk 0.7s ease-in-out infinite' }}>
+            {/* Leaf */}
+            <div style={{ position: 'absolute', bottom: -10, left: -30, width: 110, height: 26, borderRadius: '0 60% 50% 50%', background: 'linear-gradient(135deg,#4caf50,#2e7d32)', transform: 'rotate(-5deg)' }} />
+            {/* Caterpillar body segments */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 2, zIndex: 1 }}>
+              {/* Head */}
+              <div style={{ width: 22, height: 24, borderRadius: '50%', background: 'radial-gradient(circle at 35% 32%,#a8d870,#5a9e30)', boxShadow: '0 2px 6px rgba(0,0,0,0.25)', position: 'relative', flexShrink: 0 }}>
+                {/* Eyes */}
+                <div style={{ position:'absolute', top:5, left:5, width:5, height:5, borderRadius:'50%', background:'#1a1a1a' }}>
+                  <div style={{ position:'absolute', top:1, left:1, width:2, height:2, borderRadius:'50%', background:'white' }} />
+                </div>
+                <div style={{ position:'absolute', top:5, right:5, width:5, height:5, borderRadius:'50%', background:'#1a1a1a' }}>
+                  <div style={{ position:'absolute', top:1, left:1, width:2, height:2, borderRadius:'50%', background:'white' }} />
+                </div>
+                {/* Antennae */}
+                <div style={{ position:'absolute', top:-8, left:5, width:1.5, height:8, background:'#4a8e20', transform:'rotate(-15deg)', borderRadius:1 }}>
+                  <div style={{ position:'absolute', top:-3, left:-2, width:5, height:5, borderRadius:'50%', background:'#e8a020' }} />
+                </div>
+                <div style={{ position:'absolute', top:-8, right:5, width:1.5, height:8, background:'#4a8e20', transform:'rotate(15deg)', borderRadius:1 }}>
+                  <div style={{ position:'absolute', top:-3, left:-2, width:5, height:5, borderRadius:'50%', background:'#e8a020' }} />
+                </div>
+              </div>
+              {/* Body segments */}
+              {[0,1,2,3,4].map(i => {
+                const colors = ['#7ac74f','#6ab840','#7ac74f','#68b63c','#72c248']
+                return (
+                  <div key={i} style={{ width: 18, height: 20 - i*0.5, borderRadius: '50%', background: `radial-gradient(circle at 35% 35%, ${colors[i]}, #4a8e20)`, boxShadow: '0 2px 4px rgba(0,0,0,0.2)', flexShrink: 0, position: 'relative' }}>
+                    {/* Legs */}
+                    <div style={{ position:'absolute', bottom:-5, left:3, width:2, height:5, background:'#3a7a18', borderRadius:1, animation:`bLegWiggle ${0.7+i*0.05}s ease-in-out infinite`, animationDelay:`${i*0.1}s`, transformOrigin:'top center' }} />
+                    <div style={{ position:'absolute', bottom:-5, right:3, width:2, height:5, background:'#3a7a18', borderRadius:1, animation:`bLegWiggle ${0.7+i*0.05}s ease-in-out infinite`, animationDelay:`${i*0.1+0.35}s`, transformOrigin:'top center' }} />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── COCOON ── */}
+        {phase === 'cocoon' && (
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {/* Branch */}
+            <div style={{ width: 90, height: 7, borderRadius: 3, background: 'linear-gradient(90deg,#5a3820,#7a5030,#5a3820)', boxShadow: '0 2px 6px rgba(0,0,0,0.4)', position: 'relative', zIndex: 2 }}>
+              {/* Bark texture */}
+              {[12,28,44,60,76].map(x => <div key={x} style={{ position:'absolute', top:1, left:x, width:8, height:2, background:'rgba(0,0,0,0.15)', borderRadius:1 }} />)}
+            </div>
+            {/* Silk thread */}
+            <div style={{ width: 1.5, height: 14, background: 'linear-gradient(180deg,rgba(220,205,180,0.8),rgba(200,185,160,0.4))', margin: '0 auto' }} />
+            {/* Cocoon */}
+            <div style={{ width: 34, height: 62, position: 'relative',
+              background: 'linear-gradient(160deg,#d4c4a0 0%,#b0a080 38%,#907860 100%)',
+              borderRadius: '42% 42% 52% 52%',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.5), inset -5px 0 10px rgba(0,0,0,0.18)',
+              animation: 'bCocoonSway 3.2s ease-in-out infinite, bCocoonPulse 2s ease-in-out infinite',
+              transformOrigin: 'top center', overflow: 'hidden',
+            }}>
+              {/* Silk spiral wrapping */}
+              {[0,1,2,3,4,5,6,7].map(i => <div key={i} style={{ position:'absolute', top:`${6+i*12}%`, left:`${4+i%2*3}%`, right:`${4+(1-i%2)*3}%`, height:1.5, background:`rgba(255,245,225,${0.15+i%2*0.1})`, borderRadius:1 }} />)}
+              {/* Inner glow when near completion */}
+              {sp > 0.6 && <div style={{ position:'absolute', inset:0, background:`radial-gradient(ellipse at 50% 60%, rgba(200,150,255,${(sp-0.6)*0.5}) 0%, transparent 70%)`, animation:'bGlow 1.5s ease-in-out infinite' }} />}
+            </div>
+          </div>
+        )}
+
+        {/* ── BUTTERFLY ── */}
+        {phase === 'butterfly' && (
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            {/* Ambient glow */}
+            <div style={{ position:'absolute', width:140, height:80, borderRadius:'50%', background:'radial-gradient(ellipse,rgba(192,132,252,0.28),transparent 70%)', filter:'blur(16px)', animation:'bGlow 2s ease-in-out infinite' }} />
+            {/* Butterfly */}
+            <div style={{ display: 'flex', alignItems: 'center', animation: 'bFlyBob 2.2s ease-in-out infinite', opacity: Math.min(1, sp * 4), transition: 'opacity 1s ease' }}>
+              {/* Left upper wing */}
+              <div style={{ position:'relative', overflow:'hidden' }}>
+                <div style={{ width:54, height:52,
+                  background:'linear-gradient(135deg,#f97316 0%,#ea580c 25%,#dc2626 52%,#7c3aed 80%)',
+                  borderRadius:'85% 15% 65% 35%',
+                  transformOrigin:'right center',
+                  animation:'bWingFlap 0.85s ease-in-out infinite',
+                  filter:`drop-shadow(0 0 ${10+sp*8}px rgba(249,115,22,0.55))`,
+                }}>
+                  <div style={{ position:'absolute', top:'18%', left:'18%', width:'40%', height:'42%', borderRadius:'50%', background:'rgba(255,220,80,0.38)', boxShadow:'0 0 8px rgba(255,220,80,0.3)' }} />
+                  <div style={{ position:'absolute', top:'50%', left:'12%', width:'25%', height:'25%', borderRadius:'50%', background:'rgba(255,255,255,0.18)' }} />
+                  {/* Wing veins */}
+                  <div style={{ position:'absolute', top:'10%', right:'20%', width:1, height:'65%', background:'rgba(120,60,20,0.25)', transform:'rotate(15deg)', borderRadius:1 }} />
+                  <div style={{ position:'absolute', top:'30%', right:'35%', width:1, height:'45%', background:'rgba(120,60,20,0.2)', transform:'rotate(8deg)', borderRadius:1 }} />
+                </div>
+                {/* Left lower wing */}
+                <div style={{ width:38, height:36, marginTop:-4, marginLeft:10,
+                  background:'linear-gradient(135deg,#f97316 0%,#dc2626 45%,#7c3aed 100%)',
+                  borderRadius:'50% 50% 70% 30%',
+                  transformOrigin:'right top',
+                  animation:'bWingFlap 0.85s ease-in-out infinite',
+                }}>
+                  <div style={{ position:'absolute', top:'20%', left:'20%', width:'35%', height:'35%', borderRadius:'50%', background:'rgba(255,220,80,0.3)' }} />
+                </div>
+              </div>
+              {/* Body */}
+              <div style={{ width:11, height:52, zIndex:2,
+                background:'linear-gradient(180deg,#1a1a2e 0%,#2d2d4a 40%,#1a1a2e 100%)',
+                borderRadius:'50% 50% 40% 40%',
+                boxShadow:'0 0 10px rgba(0,0,0,0.5)',
+                position:'relative',
+              }}>
+                <div style={{ position:'absolute', top:2, left:2, width:3, height:3, borderRadius:'50%', background:'rgba(255,255,255,0.6)' }} />
+              </div>
+              {/* Right upper wing */}
+              <div style={{ position:'relative', overflow:'hidden' }}>
+                <div style={{ width:54, height:52,
+                  background:'linear-gradient(225deg,#f97316 0%,#ea580c 25%,#dc2626 52%,#7c3aed 80%)',
+                  borderRadius:'15% 85% 35% 65%',
+                  transformOrigin:'left center',
+                  animation:'bWingFlapR 0.85s ease-in-out infinite',
+                  filter:`drop-shadow(0 0 ${10+sp*8}px rgba(249,115,22,0.55))`,
+                }}>
+                  <div style={{ position:'absolute', top:'18%', right:'18%', width:'40%', height:'42%', borderRadius:'50%', background:'rgba(255,220,80,0.38)', boxShadow:'0 0 8px rgba(255,220,80,0.3)' }} />
+                  <div style={{ position:'absolute', top:'50%', right:'12%', width:'25%', height:'25%', borderRadius:'50%', background:'rgba(255,255,255,0.18)' }} />
+                  <div style={{ position:'absolute', top:'10%', left:'20%', width:1, height:'65%', background:'rgba(120,60,20,0.25)', transform:'rotate(-15deg)', borderRadius:1 }} />
+                </div>
+                <div style={{ width:38, height:36, marginTop:-4, marginRight:10,
+                  background:'linear-gradient(225deg,#f97316 0%,#dc2626 45%,#7c3aed 100%)',
+                  borderRadius:'50% 50% 30% 70%',
+                  transformOrigin:'left top',
+                  animation:'bWingFlapR 0.85s ease-in-out infinite',
+                }}>
+                  <div style={{ position:'absolute', top:'20%', right:'20%', width:'35%', height:'35%', borderRadius:'50%', background:'rgba(255,220,80,0.3)' }} />
+                </div>
+              </div>
+            </div>
+            {/* Emergence sparkles */}
+            {sp < 0.55 && [0,1,2,3,4,5,6,7].map(i => (
+              <div key={i} style={{
+                position:'absolute', top:`${10+(i*19)%70}%`, left:`${5+(i*23)%85}%`,
+                width: i%2===0?5:4, height: i%2===0?5:4, borderRadius:'50%',
+                background:['#f97316','#fbbf24','#c084fc','#60a5fa','#f43f5e','#a3e635','#38bdf8','#fb7185'][i],
+                animation:`bSparkle ${1.1+i*0.28}s ease-in-out infinite`, animationDelay:`${i*0.18}s`,
+              }} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Progress bar */}
-      <div style={{ width: 180, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-        <div style={{
-          height: '100%', width: `${progress}%`, borderRadius: 2,
-          background: `linear-gradient(90deg,#a78bfa,#f97316)`,
-          transition: 'width 1s ease',
-          boxShadow: '0 0 6px rgba(167,139,250,0.6)',
+      <div style={{ width: 180, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <div style={{ height:'100%', width:`${progress}%`, borderRadius:2,
+          background:'linear-gradient(90deg,#a78bfa,#f97316)',
+          transition:'width 1s ease', boxShadow:'0 0 6px rgba(167,139,250,0.5)',
         }} />
       </div>
     </div>
   )
 }
 
-// ── Cloud shape helper ────────────────────────────────────────
+// ── Mario ─────────────────────────────────────────────────────
+const PX = 3
+type PixelDef = [number,number,number,number,string]
+const MARIO_BASE: PixelDef[] = [
+  [3,0,6,1,'#e8312a'],[2,1,8,2,'#e8312a'],
+  [2,3,2,1,'#6b3a2a'],[7,3,1,1,'#6b3a2a'],
+  [2,3,8,3,'#ffc982'],
+  [3,4,2,1,'#1a1a1a'],[7,4,1,1,'#1a1a1a'],
+  [5,5,2,1,'#e8826a'],
+  [2,6,8,1,'#6b3a2a'],
+  [1,7,10,3,'#e8312a'],
+  [3,8,6,2,'#2d3abb'],
+  [3,8,1,1,'#ffc982'],[8,8,1,1,'#ffc982'],
+  [0,8,1,2,'#ffc982'],[11,8,1,2,'#ffc982'],
+  [0,10,2,1,'#f0f0f0'],[10,10,2,1,'#f0f0f0'],
+]
+const MARIO_LEGS: PixelDef[][] = [
+  [[1,11,4,3,'#2d3abb'],[7,11,4,3,'#2d3abb'],[0,14,4,2,'#6b3a2a'],[7,14,4,2,'#6b3a2a']],
+  [[0,11,4,3,'#2d3abb'],[8,11,4,3,'#2d3abb'],[0,14,5,2,'#6b3a2a'],[8,14,3,2,'#6b3a2a']],
+  [[2,11,4,3,'#2d3abb'],[6,11,4,3,'#2d3abb'],[1,14,4,2,'#6b3a2a'],[6,14,5,2,'#6b3a2a']],
+]
+function MarioPixel({ frame }: { frame: number }) {
+  return (
+    <div style={{ position:'relative', width:12*PX, height:16*PX }}>
+      {[...MARIO_BASE,...MARIO_LEGS[frame]].map(([x,y,w,h,c],i) => (
+        <div key={i} style={{ position:'absolute', left:x*PX, top:y*PX, width:w*PX, height:h*PX, background:c }} />
+      ))}
+    </div>
+  )
+}
+
+function MarioScene({ progress }: { progress: number }) {
+  const [frame, setFrame] = useState(0)
+  const fRef = useRef<ReturnType<typeof setInterval>|null>(null)
+  useEffect(() => {
+    fRef.current = setInterval(() => setFrame(f => (f+1)%3), 140)
+    return () => { if (fRef.current) clearInterval(fRef.current) }
+  }, [])
+  const score = Math.floor(progress * 840) * 100
+  const coins = Math.floor(progress * 0.38)
+  return (
+    <div style={{ position:'relative', height:220, overflow:'hidden', borderRadius:12 }}>
+      <style>{`
+        @keyframes mHill{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        @keyframes mCloud{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        @keyframes mGround{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        @keyframes mBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+        @keyframes mCoin{0%,100%{transform:scaleX(1)}45%,55%{transform:scaleX(0.08)}}
+        @keyframes mQ{0%,100%{box-shadow:inset -2px -3px 0 rgba(0,0,0,0.22),0 0 4px rgba(249,202,36,0.3)}50%{box-shadow:inset -2px -3px 0 rgba(0,0,0,0.22),0 0 14px rgba(249,202,36,0.9)}}
+      `}</style>
+      <div style={{ position:'absolute', inset:0, background:'linear-gradient(180deg,#5c94fc 0%,#9ab8ff 100%)' }} />
+      {/* Hills */}
+      <div style={{ position:'absolute', bottom:52, left:0, width:'200%', display:'flex', animation:'mHill 22s linear infinite' }}>
+        {[80,64,90,70,76,68,84,72,80,64,90,70,76,68,84,72].map((h,i) => (
+          <div key={i} style={{ flexShrink:0, width:50+Math.round(h/3), height:h, borderRadius:`${Math.round(h*0.6)}px ${Math.round(h*0.6)}px 0 0`, background:'linear-gradient(180deg,#5aa832,#4a9022)', marginRight:-3 }} />
+        ))}
+      </div>
+      {/* Clouds */}
+      <div style={{ position:'absolute', top:12, left:0, width:'200%', display:'flex', gap:50, animation:'mCloud 28s linear infinite' }}>
+        {[1,2,1,3,2,1,2,1,3,2,1,2,1,3,2,1,2,1,3,2].map((sz,i) => {
+          const w = 42+sz*16
+          return (
+            <div key={i} style={{ position:'relative', flexShrink:0, width:w, height:Math.round(w*0.5) }}>
+              <div style={{ position:'absolute', bottom:0, left:0, width:w, height:Math.round(w*0.28), borderRadius:Math.round(w*0.14), background:'white' }} />
+              <div style={{ position:'absolute', bottom:Math.round(w*0.2), left:Math.round(w*0.1), width:Math.round(w*0.36), height:Math.round(w*0.36), borderRadius:'50%', background:'white' }} />
+              <div style={{ position:'absolute', bottom:Math.round(w*0.22), left:Math.round(w*0.28), width:Math.round(w*0.44), height:Math.round(w*0.44), borderRadius:'50%', background:'white' }} />
+              <div style={{ position:'absolute', bottom:Math.round(w*0.16), right:Math.round(w*0.08), width:Math.round(w*0.28), height:Math.round(w*0.28), borderRadius:'50%', background:'white' }} />
+            </div>
+          )
+        })}
+      </div>
+      {/* ? Blocks */}
+      <div style={{ position:'absolute', bottom:108, left:0, width:'200%', display:'flex', animation:'mGround 8s linear infinite' }}>
+        {[1,0,0,1,0,1,0,0,1,0,1,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,1,0,0].map((show,i) => show ? (
+          <div key={i} style={{ flexShrink:0, marginLeft:40+i*14, width:22, height:22,
+            background:'#f9ca24', border:'2px solid #6b3a2a', borderRadius:2,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            boxShadow:'inset -2px -3px 0 rgba(0,0,0,0.22),inset 2px 2px 0 rgba(255,255,255,0.3)',
+            animation:'mQ 1.8s ease-in-out infinite', animationDelay:`${i*0.35}s`,
+            fontFamily:'monospace', fontWeight:'bold', fontSize:13, color:'#7a3a00',
+          }}>?</div>
+        ) : <div key={i} style={{ flexShrink:0, width:68+i*8 }} />)}
+      </div>
+      {/* Coins */}
+      <div style={{ position:'absolute', bottom:136, left:0, width:'200%', display:'flex', animation:'mGround 8s linear infinite' }}>
+        {[1,0,1,1,0,1,0,1,0,1,1,0,1,0,1,1,0,1,0,1,1,0,1,1,0,1,0,1,0,1].map((show,i) => show ? (
+          <div key={i} style={{ flexShrink:0, marginLeft:30+i*7, width:10, height:14,
+            background:'radial-gradient(circle at 35% 30%,#ffe066,#f9ca24)',
+            borderRadius:'50%', border:'1px solid #c8960a',
+            animation:`mCoin ${1.1+i*0.13}s ease-in-out infinite`, animationDelay:`${i*0.2}s`,
+          }} />
+        ) : <div key={i} style={{ flexShrink:0, width:32+i*5 }} />)}
+      </div>
+      {/* Ground */}
+      <div style={{ position:'absolute', bottom:0, left:0, width:'200%', height:52, display:'flex', animation:'mGround 3.5s linear infinite' }}>
+        {Array.from({length:60}).map((_,i) => (
+          <div key={i} style={{ flexShrink:0, width:20, height:52,
+            background:i%2===0?'#c84b11':'#b84309',
+            borderTop:'4px solid #56b000',
+            borderRight:'1px solid rgba(0,0,0,0.1)',
+            boxSizing:'border-box',
+          }} />
+        ))}
+      </div>
+      {/* Pipes */}
+      <div style={{ position:'absolute', bottom:52, left:0, width:'200%', display:'flex', animation:'mGround 8s linear infinite' }}>
+        {[0,1,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1,0,0,1,0,1,0,0].map((show,i) => show ? (
+          <div key={i} style={{ flexShrink:0, marginLeft:44+i*24, position:'relative' }}>
+            <div style={{ width:38, height:10, background:'#2d9e2d', marginLeft:-4, borderRadius:'3px 3px 0 0', boxShadow:'inset -4px 0 6px rgba(0,0,0,0.28)', border:'1px solid #1a7a1a' }} />
+            <div style={{ width:30, height:36+i%3*10, background:'#3cb43c', boxShadow:'inset -4px 0 8px rgba(0,0,0,0.22)', border:'1px solid #2a9a2a', borderTop:'none' }} />
+          </div>
+        ) : <div key={i} style={{ flexShrink:0, width:70+i*10 }} />)}
+      </div>
+      {/* Flag */}
+      <div style={{ position:'absolute', bottom:52, right:'5%' }}>
+        <div style={{ width:4, height:120, background:'linear-gradient(180deg,#b0b0b0,#888)', margin:'0 auto', boxShadow:'1px 0 3px rgba(0,0,0,0.3)' }} />
+        <div style={{ position:'absolute', top:0, left:4, width:18, height:12, background:'linear-gradient(135deg,#2d9e2d,#56cc56)', clipPath:'polygon(0 0,100% 50%,0 100%)' }} />
+        <div style={{ position:'absolute', bottom:-6, left:-6, width:16, height:6, background:'#888', borderRadius:'0 0 3px 3px' }} />
+      </div>
+      {/* Mario */}
+      <div style={{ position:'absolute', bottom:52, left:'18%', animation:'mBob 0.28s ease-in-out infinite' }}>
+        <MarioPixel frame={frame} />
+      </div>
+      {/* HUD */}
+      <div style={{ position:'absolute', top:6, left:10, right:10, display:'flex', justifyContent:'space-between', fontFamily:'"Courier New",monospace', fontSize:10, fontWeight:'bold', color:'white', textShadow:'1px 1px 0 rgba(0,0,0,0.8)' }}>
+        <div><div style={{opacity:0.7}}>MARIO</div>{String(score).padStart(6,'0')}</div>
+        <div style={{textAlign:'center'}}><div style={{opacity:0.7}}>COINS</div>🪙×{String(coins).padStart(2,'0')}</div>
+        <div style={{textAlign:'right'}}><div style={{opacity:0.7}}>WORLD</div>1–{Math.min(4,Math.floor(progress/25)+1)}</div>
+      </div>
+    </div>
+  )
+}
+
+// ── Cloud shape helper (kept for porthole if needed) ──────────
 function CloudBlob({ w, tint = 'rgba(255,255,255,0.9)' }: { w: number; tint?: string }) {
   const h = Math.round(w * 0.36)
   const s = (n: number) => Math.round(w * n)
@@ -803,7 +1024,6 @@ function FocusInner() {
 
   const taskTitle   = params.get('title')    || 'Focus session'
   const sessionId   = params.get('sessionId')
-  const userId      = params.get('userId')
   const totalSeconds = parseInt(params.get('duration') || '25') * 60
 
   const [timeLeft, setTimeLeft]     = useState(totalSeconds)
@@ -890,7 +1110,7 @@ function FocusInner() {
       case 'coffee':    return <CoffeeScene    progress={progress} />
       case 'plant':     return <PlantScene     progress={progress} />
       case 'butterfly': return <ButterflyScene progress={progress} />
-      case 'flight':    return <FlightScene    progress={progress} />
+      case 'mario':     return <MarioScene      progress={progress} />
       case 'candle':    return <CandleScene    progress={progress} />
       default:          return <CoffeeScene    progress={progress} />
     }

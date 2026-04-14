@@ -641,22 +641,36 @@ export default function Dashboard() {
                     if (!userId) return
                     setEodSubmitting(true)
                     try {
-                      // Mark completed tasks as done
-                      const toMark = todayTasks.filter(t => eodChecked.has(t.id) && t.status !== 'done')
-                      await Promise.all(toMark.map(t => api.updateTaskStatus(t.id, 'done')))
-                      // Build feedback string
+                      // Mark checked tasks as done, reset unchecked in_progress → todo
+                      const toMarkDone = todayTasks.filter(t => eodChecked.has(t.id) && t.status !== 'done')
+                      const toResetTodo = todayTasks.filter(t => !eodChecked.has(t.id) && t.status === 'in_progress')
+                      await Promise.all([
+                        ...toMarkDone.map(t => api.updateTaskStatus(t.id, 'done')),
+                        ...toResetTodo.map(t => api.updateTaskStatus(t.id, 'todo')),
+                      ])
+                      // Build feedback string for Claude
                       const completed = todayTasks.filter(t => eodChecked.has(t.id)).map(t => t.title)
                       const missed = todayTasks.filter(t => !eodChecked.has(t.id)).map(t => t.title)
+                      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
+                      const tomorrowStr = tomorrow.toISOString().split('T')[0]
                       const feedback = [
+                        `Start scheduling from ${tomorrowStr} (today's session is over).`,
                         completed.length ? `Completed today: ${completed.join(', ')}.` : 'Did not complete any tasks today.',
-                        missed.length ? `Did not finish: ${missed.join(', ')}.` : '',
+                        missed.length ? `Did not finish: ${missed.join(', ')}. Reschedule these into the plan from tomorrow.` : '',
                         eodNotes ? `User notes: ${eodNotes}` : '',
                       ].filter(Boolean).join(' ')
                       await api.fullReschedule(userId, feedback)
-                      const plan = await api.getTodayPlan(userId).catch(() => ({ tasks: [] }))
+                      // Refresh both today's plan and stats
+                      const [plan, statsData] = await Promise.all([
+                        api.getTodayPlan(userId).catch(() => ({ tasks: [] })),
+                        api.getStats(userId).catch(() => null),
+                      ])
                       setTodayTasks(plan.tasks || [])
+                      setStats(statsData)
                       setShowEOD(false)
                       setEodNotes('')
+                      setRescheduleSuccess(true)
+                      setTimeout(() => setRescheduleSuccess(false), 4000)
                     } catch (e) { console.error(e) }
                     finally { setEodSubmitting(false) }
                   }}
