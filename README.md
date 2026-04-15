@@ -1,4 +1,4 @@
-# 📚 Study Planner Agent
+# 📚 FlowState
 
 An end-to-end, AI-powered study planning app for students that turns a syllabus into a **dynamic, adaptive study plan** with built-in **Pomodoro focus sessions**, **calendar scheduling**, and **flashcard-based learning**.
 
