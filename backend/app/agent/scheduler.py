@@ -64,6 +64,7 @@ def generate_schedule_multi_course(
     sessions_per_day: int = None,
     session_duration_minutes: int = None,
     tasks_per_day_override: Dict[str, int] = None,   # course_id → forced tasks/day
+    interleave_courses: bool = True,
 ) -> List[Dict]:
     """
     Deadline-aware multi-course scheduler.
@@ -73,8 +74,12 @@ def generate_schedule_multi_course(
     2. Calculates whether tasks fit; if not, auto-increases density.
     3. Schedules independently.
 
-    After scheduling each course it merges the per-course schedules back into
-    a single interleaved list, preserving per-day ordering by exam proximity.
+    interleave_courses=True (default):  each day mixes tasks from all courses,
+    ordered by exam urgency (soonest exam first).
+
+    interleave_courses=False: each day is dedicated to a single course,
+    rotating through courses round-robin in urgency order so the most urgent
+    course always gets a day before less-urgent courses repeat.
     """
     if start_date is None:
         start_date = date.today()
@@ -84,14 +89,80 @@ def generate_schedule_multi_course(
         daily_study_hours, pomodoro_minutes, sessions_per_day, session_duration_minutes
     )
 
-    # Step 1 — schedule each course against its own exam deadline
-    # Result: date → list[(course_urgency_score, task)]
-    day_slots: Dict[date, List] = defaultdict(list)
-
     sorted_courses = sorted(
-        tasks_by_course.keys(),
+        [cid for cid, tasks in tasks_by_course.items() if tasks],
         key=lambda cid: course_map.get(cid, {}).get("exam_date", "9999-99-99")
     )
+
+    if not interleave_courses:
+        # ── Non-interleave: dedicate each available day to one course ──────
+        # Build a global list of available days (union across all exams)
+        latest_exam = max(
+            (_parse_date(course_map[cid]["exam_date"]) for cid in sorted_courses),
+            default=start_date + timedelta(days=30),
+        )
+        all_available = _available_days(start_date, latest_exam, disrupted_dates)
+        if not all_available:
+            all_available = [start_date]
+
+        # Remaining tasks per course (mutable copies)
+        remaining = {cid: list(tasks_by_course[cid]) for cid in sorted_courses}
+        result = []
+        day_idx = 0
+        course_cycle_idx = 0   # which course to serve next (round-robin by urgency rank)
+
+        for d in all_available:
+            # Skip courses that are exhausted
+            active_courses = [cid for cid in sorted_courses if remaining[cid]]
+            if not active_courses:
+                break
+
+            # Advance round-robin pointer, skipping exhausted courses
+            while sorted_courses[course_cycle_idx % len(sorted_courses)] not in active_courses:
+                course_cycle_idx += 1
+
+            cid = sorted_courses[course_cycle_idx % len(sorted_courses)]
+            course_cycle_idx += 1
+
+            exam_date = _parse_date(course_map[cid]["exam_date"])
+            exam_buffer = exam_date - timedelta(days=1)
+            if d >= exam_buffer:
+                # Don't schedule this course on or after its exam buffer — try next
+                for alt in active_courses:
+                    alt_exam = _parse_date(course_map[alt]["exam_date"]) - timedelta(days=1)
+                    if d < alt_exam:
+                        cid = alt
+                        break
+
+            ppd = tasks_per_day_override.get(cid, base_ppd) if tasks_per_day_override else base_ppd
+            ppd = min(max(ppd, 1), 12)
+
+            day_tasks = remaining[cid][:ppd]
+            remaining[cid] = remaining[cid][ppd:]
+
+            for order_idx, t in enumerate(day_tasks):
+                t = dict(t)
+                t["scheduled_date"] = d.isoformat()
+                t["order_index"] = order_idx
+                result.append(t)
+
+        # Any tasks that didn't fit — pile onto the last available day before exam
+        for cid in sorted_courses:
+            if not remaining[cid]:
+                continue
+            exam_buffer = _parse_date(course_map[cid]["exam_date"]) - timedelta(days=1)
+            fallback_days = _available_days(start_date, exam_buffer, disrupted_dates)
+            fallback = fallback_days[-1] if fallback_days else start_date
+            for order_idx, t in enumerate(remaining[cid]):
+                t = dict(t)
+                t["scheduled_date"] = fallback.isoformat()
+                t["order_index"] = 1000 + order_idx
+                result.append(t)
+
+        return result
+
+    # ── Interleave (default): mix courses each day sorted by urgency ────────
+    day_slots: Dict[date, List] = defaultdict(list)
 
     for cid in sorted_courses:
         tasks = tasks_by_course[cid]
@@ -103,31 +174,26 @@ def generate_schedule_multi_course(
         available = _available_days(start_date, exam_buffer, disrupted_dates)
 
         if not available:
-            # Exam already past or today — pile onto today
             available = [start_date]
 
-        # How many tasks/day do we need to cover all tasks before the exam?
         required_ppd = max(base_ppd, -(-len(tasks) // max(len(available), 1)))  # ceiling div
-        # Cap at a sensible max to avoid unrealistic pile-ons (12 tasks/day max)
         ppd = min(required_ppd, 12)
 
         if tasks_per_day_override and cid in tasks_per_day_override:
             ppd = tasks_per_day_override[cid]
 
         days_to_exam = (exam_date - start_date).days
-        urgency = 1.0 / max(days_to_exam, 1)   # higher = more urgent
+        urgency = 1.0 / max(days_to_exam, 1)
 
         per_course = _pack_tasks(tasks, available, ppd)
         for t in per_course:
             d = _parse_date(t["scheduled_date"])
             day_slots[d].append((urgency, t))
 
-    # Step 2 — merge: within each day sort by urgency desc (soonest exam first),
-    # then re-assign order_index
     result = []
     for d in sorted(day_slots.keys()):
         slots = day_slots[d]
-        slots.sort(key=lambda x: -x[0])   # most urgent first within the day
+        slots.sort(key=lambda x: -x[0])
         for idx, (_, task) in enumerate(slots):
             task["order_index"] = idx
             result.append(task)

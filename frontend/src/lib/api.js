@@ -36,6 +36,7 @@ export const api = {
   getTasks: (courseId) => req(`/tasks/course/${courseId}`),
   getTodayTasks: (userId) => req(`/tasks/today/${userId}`),
   updateTaskStatus: (taskId, status) => req(`/tasks/${taskId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  updateTaskType: (taskId, task_type) => req(`/tasks/${taskId}/type`, { method: 'PATCH', body: JSON.stringify({ task_type }) }),
   deleteTask: (taskId) => req(`/tasks/${taskId}`, { method: 'DELETE' }),
   reorderTasks: (updates) => req('/tasks/reorder', { method: 'PATCH', body: JSON.stringify(updates) }),
 

@@ -44,6 +44,21 @@ type Stats = {
   weekly_pomodoros: { date: string; count: number }[]
 }
 
+const PRIORITY_STYLE: Record<string, { border: string; badge: string; label: string }> = {
+  high:   { border: '#FCA5A5', badge: '#FEF2F2', label: 'High' },
+  medium: { border: '#FDE68A', badge: '#FFFBEB', label: 'Med'  },
+  low:    { border: '#86EFAC', badge: '#F0FDF4', label: 'Low'  },
+}
+const PRIORITY_TEXT: Record<string, string> = { high: '#DC2626', medium: '#D97706', low: '#16A34A' }
+
+function taskTypeTag(taskType: string): { label: string; bg: string; text: string } {
+  if (taskType === 'practice' || taskType === 'assessment')
+    return { label: 'Practice', bg: '#F0FDF4', text: '#16A34A' }
+  if (taskType === 'review')
+    return { label: 'Revision', bg: '#FDF4FF', text: '#9333EA' }
+  return { label: 'Theory', bg: '#EFF6FF', text: '#1D4ED8' }
+}
+
 const COVER_IMAGES = [
   'https://plus.unsplash.com/premium_photo-1661962542692-4fe7a4ad6b54?w=1200&h=280&fit=crop',
   'https://plus.unsplash.com/premium_photo-1697729844084-c03db2377161?w=1200&h=280&fit=crop',
@@ -98,6 +113,15 @@ export default function Dashboard() {
   const [isRunning, setIsRunning] = useState(false)
   const [sessionNotes, setSessionNotes] = useState('')
   const [view, setView] = useState<'today' | 'board'>('today')
+  const [boardTypeFilter, setBoardTypeFilter] = useState<'all' | 'theory' | 'practice' | 'revision'>('all')
+  const [boardPriorityFilter, setBoardPriorityFilter] = useState<'all' | 'high' | 'medium' | 'low'>('all')
+  const [addingToCol, setAddingToCol] = useState<'todo' | 'in_progress' | 'done' | 'list' | null>(null)
+  const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [newTaskType, setNewTaskType] = useState('study')
+  const [newTaskPriority, setNewTaskPriority] = useState('medium')
+  const [newTaskMinutes, setNewTaskMinutes] = useState('25')
+  const [newTaskDate, setNewTaskDate] = useState('')
+  const [savingTask, setSavingTask] = useState(false)
   const [loading, setLoading] = useState(true)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -196,6 +220,40 @@ export default function Dashboard() {
   const moveTask = async (task: Task, status: Task['status']) => {
     await api.updateTaskStatus(task.id, status)
     setCourseTasks(prev => prev.map(t => t.id === task.id ? { ...t, status } : t))
+    if (userId) api.getStats(userId).then(s => setStats(s)).catch(() => {})
+  }
+
+  const addTask = async (status: string = 'todo') => {
+    if (!userId || !selectedCourse || !newTaskTitle.trim()) return
+    setSavingTask(true)
+    try {
+      const [created] = await api.createTasks([{
+        course_id: selectedCourse.id,
+        user_id: userId,
+        title: newTaskTitle.trim(),
+        task_type: newTaskType,
+        priority: newTaskPriority,
+        status,
+        estimated_minutes: parseInt(newTaskMinutes) || 25,
+        scheduled_date: newTaskDate || null,
+        order_index: courseTasks.length,
+      }])
+      setCourseTasks(prev => [...prev, created])
+      setNewTaskTitle('')
+      setNewTaskType('study')
+      setNewTaskPriority('medium')
+      setNewTaskMinutes('25')
+      setNewTaskDate('')
+      setAddingToCol(null)
+    } catch (e) { console.error(e) }
+    finally { setSavingTask(false) }
+  }
+
+  const cycleTaskType = async (task: Task) => {
+    const cycle: Record<string, string> = { study: 'practice', practice: 'review', review: 'study', assessment: 'review' }
+    const next = cycle[task.task_type] ?? 'study'
+    await api.updateTaskType(task.id, next)
+    setCourseTasks(prev => prev.map(t => t.id === task.id ? { ...t, task_type: next } : t))
   }
 
   const minutes = Math.floor(timeLeft / 60)
@@ -206,9 +264,21 @@ export default function Dashboard() {
   const coverIdx = selectedCourse ? (courses.indexOf(selectedCourse) % COVER_IMAGES.length) : 0
   const coverUrl = COVER_IMAGES[coverIdx]
 
-  const todoTasks     = courseTasks.filter(t => t.status === 'todo')
-  const inProgTasks   = courseTasks.filter(t => t.status === 'in_progress')
-  const doneTasks     = courseTasks.filter(t => t.status === 'done')
+  const matchesFilters = (t: Task) => {
+    if (boardTypeFilter === 'theory'   && t.task_type !== 'study') return false
+    if (boardTypeFilter === 'practice' && !['practice','assessment'].includes(t.task_type)) return false
+    if (boardTypeFilter === 'revision' && t.task_type !== 'review') return false
+    if (boardPriorityFilter !== 'all'  && t.priority !== boardPriorityFilter) return false
+    return true
+  }
+
+  const todoTasks   = courseTasks.filter(t => t.status === 'todo')
+  const inProgTasks = courseTasks.filter(t => t.status === 'in_progress')
+  const doneTasks   = courseTasks.filter(t => t.status === 'done')
+
+  const filteredTodo    = todoTasks.filter(matchesFilters)
+  const filteredInProg  = inProgTasks.filter(matchesFilters)
+  const filteredDone    = doneTasks.filter(matchesFilters)
 
   if (loading) return (
     <div className="flex h-screen items-center justify-center" style={{ backgroundColor: NOTION.bg }}>
@@ -539,31 +609,110 @@ export default function Dashboard() {
               {/* Tasks list */}
               {view === 'today' && (
                 <div className="p-6" style={{ border: `1px solid ${NOTION.border}`, borderRadius: 4 }}>
-                  <h2 className="mb-4 text-2xl font-semibold" style={{ color: NOTION.text }}>All tasks</h2>
-                  {courseTasks.length === 0 ? (
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <h2 className="text-2xl font-semibold shrink-0" style={{ color: NOTION.text }}>All tasks</h2>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex gap-3 text-xs" style={{ color: NOTION.muted }}>
+                        <span>📘 {courseTasks.filter(t => t.task_type === 'study').length}</span>
+                        <span>🏋️ {courseTasks.filter(t => ['practice','assessment'].includes(t.task_type)).length}</span>
+                        <span>🔁 {courseTasks.filter(t => t.task_type === 'review').length}</span>
+                      </div>
+                      <button onClick={() => { setAddingToCol('list'); setNewTaskTitle('') }}
+                        className="rounded px-3 py-1.5 text-xs font-medium transition"
+                        style={{ backgroundColor: NOTION.text, color: '#fff' }}>
+                        + Add task
+                      </button>
+                    </div>
+                  </div>
+
+                  {addingToCol === 'list' && (
+                    <div className="mb-3 rounded p-3 space-y-2" style={{ border: `1px solid ${NOTION.border}`, backgroundColor: NOTION.sidebar }}>
+                      <input autoFocus placeholder="Task title" value={newTaskTitle}
+                        onChange={e => setNewTaskTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addTask('todo'); if (e.key === 'Escape') setAddingToCol(null) }}
+                        className="w-full rounded px-3 py-1.5 text-sm focus:outline-none"
+                        style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }} />
+                      <div className="flex flex-wrap gap-2">
+                        <select value={newTaskType} onChange={e => setNewTaskType(e.target.value)}
+                          className="rounded px-2 py-1 text-xs focus:outline-none"
+                          style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }}>
+                          <option value="study">📘 Theory</option>
+                          <option value="practice">🏋️ Practice</option>
+                          <option value="review">🔁 Revision</option>
+                        </select>
+                        <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)}
+                          className="rounded px-2 py-1 text-xs focus:outline-none"
+                          style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }}>
+                          <option value="high">High priority</option>
+                          <option value="medium">Med priority</option>
+                          <option value="low">Low priority</option>
+                        </select>
+                        <input type="number" value={newTaskMinutes} onChange={e => setNewTaskMinutes(e.target.value)}
+                          min={5} max={240} placeholder="25"
+                          className="w-16 rounded px-2 py-1 text-xs focus:outline-none"
+                          style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }} />
+                        <span className="self-center text-xs" style={{ color: NOTION.muted }}>min</span>
+                        <input type="date" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)}
+                          className="rounded px-2 py-1 text-xs focus:outline-none"
+                          style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }} />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => addTask('todo')} disabled={savingTask || !newTaskTitle.trim()}
+                          className="rounded px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                          style={{ backgroundColor: NOTION.text }}>
+                          {savingTask ? 'Adding…' : 'Add task'}
+                        </button>
+                        <button onClick={() => setAddingToCol(null)}
+                          className="rounded px-3 py-1.5 text-xs transition hover:bg-[#EFEFED]"
+                          style={{ color: NOTION.muted }}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {courseTasks.length === 0 && addingToCol !== 'list' ? (
                     <div className="py-8 text-center text-sm" style={{ color: NOTION.muted }}>No tasks yet.</div>
                   ) : (
                     <div className="space-y-1">
-                      {courseTasks.map(task => (
-                        <div key={task.id} className="flex items-center gap-3 rounded px-3 py-2 transition-colors hover:bg-[#EFEFED]">
-                          <input type="checkbox" checked={task.status === 'done'}
-                            onChange={() => moveTask(task, task.status === 'done' ? 'todo' : 'done')}
-                            className="cursor-pointer" />
-                          <div className="flex-1 min-w-0">
-                            <div className={`text-sm ${task.status === 'done' ? 'line-through' : ''}`}
-                              style={{ color: task.status === 'done' ? NOTION.muted : NOTION.text }}>
-                              {task.title}
+                      {courseTasks.map(task => {
+                        const pStyle = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.medium
+                        const pText  = PRIORITY_TEXT[task.priority]  || PRIORITY_TEXT.medium
+                        const tTag   = taskTypeTag(task.task_type)
+                        return (
+                          <div key={task.id}
+                            className="flex items-center gap-3 rounded px-3 py-2 transition-colors hover:bg-[#EFEFED]"
+                            style={{ borderLeft: `3px solid ${task.status === 'done' ? NOTION.border : pStyle.border}` }}>
+                            <input type="checkbox" checked={task.status === 'done'}
+                              onChange={() => moveTask(task, task.status === 'done' ? 'todo' : 'done')}
+                              className="cursor-pointer shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-sm ${task.status === 'done' ? 'line-through' : ''}`}
+                                style={{ color: task.status === 'done' ? NOTION.muted : NOTION.text }}>
+                                {task.title}
+                              </div>
+                              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                <button onClick={() => cycleTaskType(task)} title="Click to change type"
+                                  className="rounded px-1.5 py-0.5 text-xs font-medium transition hover:opacity-70"
+                                  style={{ backgroundColor: tTag.bg, color: tTag.text }}>
+                                  {tTag.label}
+                                </button>
+                                <span className="rounded px-1.5 py-0.5 text-xs font-medium"
+                                  style={{ backgroundColor: pStyle.badge, color: pText }}>
+                                  {pStyle.label}
+                                </span>
+                                <span className="text-xs" style={{ color: NOTION.muted }}>
+                                  {task.estimated_minutes}m
+                                  {task.scheduled_date && ` · ${new Date(task.scheduled_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
+                                </span>
+                              </div>
                             </div>
-                            <div className="text-xs" style={{ color: NOTION.muted }}>
-                              {task.estimated_minutes}m · {task.priority}
-                              {task.scheduled_date && ` · ${new Date(task.scheduled_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
-                            </div>
+                            {task.status !== 'done' && (
+                              <NotionBtn onClick={() => startTimer(task)}>▶</NotionBtn>
+                            )}
                           </div>
-                          {task.status !== 'done' && (
-                            <NotionBtn onClick={() => startTimer(task)}>▶</NotionBtn>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -571,40 +720,164 @@ export default function Dashboard() {
 
               {/* Kanban */}
               {view === 'board' && (
-                <div className="grid grid-cols-3 gap-4">
-                  {([
-                    { col: 'todo' as const,        label: 'To Do',       tasks: todoTasks },
-                    { col: 'in_progress' as const,  label: 'In Progress', tasks: inProgTasks },
-                    { col: 'done' as const,          label: 'Done',        tasks: doneTasks },
-                  ]).map(({ col, label, tasks }) => (
-                    <div key={col} className="rounded p-4" style={{ border: `1px solid ${NOTION.border}`, backgroundColor: NOTION.sidebar }}>
-                      <div className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: NOTION.muted }}>
-                        {label} <span className="ml-1">{tasks.length}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {tasks.map(task => (
-                          <div key={task.id} className="rounded p-3" style={{ backgroundColor: NOTION.bg, border: `1px solid ${NOTION.border}` }}>
-                            <div className="mb-1 text-sm" style={{ color: NOTION.text }}>{task.title}</div>
-                            <div className="mb-2 text-xs" style={{ color: NOTION.muted }}>{task.estimated_minutes}m · {task.priority}</div>
-                            <div className="flex gap-1">
-                              {col !== 'todo' && (
-                                <button onClick={() => moveTask(task, 'todo')} className="rounded px-2 py-0.5 text-xs hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>← To Do</button>
-                              )}
-                              {col !== 'in_progress' && (
-                                <button onClick={() => moveTask(task, 'in_progress')} className="rounded px-2 py-0.5 text-xs hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>
-                                  {col === 'todo' ? 'Start →' : '← WIP'}
-                                </button>
-                              )}
-                              {col !== 'done' && (
-                                <button onClick={() => moveTask(task, 'done')} className="rounded px-2 py-0.5 text-xs hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>Done ✓</button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {tasks.length === 0 && <div className="py-4 text-center text-xs" style={{ color: NOTION.muted }}>Empty</div>}
-                      </div>
+                <div>
+                  {/* Filter bar */}
+                  <div className="mb-4 flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium" style={{ color: NOTION.muted }}>Type:</span>
+                      {(['all', 'theory', 'practice', 'revision'] as const).map(f => (
+                        <button key={f} onClick={() => setBoardTypeFilter(f)}
+                          className="rounded px-2.5 py-1 text-xs font-medium transition"
+                          style={{
+                            backgroundColor: boardTypeFilter === f ? NOTION.text : NOTION.hover,
+                            color: boardTypeFilter === f ? '#fff' : NOTION.muted,
+                            border: `1px solid ${boardTypeFilter === f ? NOTION.text : NOTION.border}`,
+                          }}>
+                          {f === 'all' ? 'All' : f === 'theory' ? '📘 Theory' : f === 'practice' ? '🏋️ Practice' : '🔁 Revision'}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-medium" style={{ color: NOTION.muted }}>Priority:</span>
+                      {(['all', 'high', 'medium', 'low'] as const).map(f => {
+                        const active = boardPriorityFilter === f
+                        const pStyle = f !== 'all' ? PRIORITY_STYLE[f] : null
+                        return (
+                          <button key={f} onClick={() => setBoardPriorityFilter(f)}
+                            className="rounded px-2.5 py-1 text-xs font-medium transition"
+                            style={{
+                              backgroundColor: active ? (pStyle?.badge ?? NOTION.text) : NOTION.hover,
+                              color: active ? (PRIORITY_TEXT[f] ?? '#fff') : NOTION.muted,
+                              border: `1px solid ${active ? (pStyle?.border ?? NOTION.text) : NOTION.border}`,
+                            }}>
+                            {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {(boardTypeFilter !== 'all' || boardPriorityFilter !== 'all') && (
+                      <button
+                        onClick={() => { setBoardTypeFilter('all'); setBoardPriorityFilter('all') }}
+                        className="text-xs transition hover:underline"
+                        style={{ color: NOTION.muted }}>
+                        Clear filters ×
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    {([
+                      { col: 'todo' as const,       label: 'To Do',       tasks: filteredTodo },
+                      { col: 'in_progress' as const, label: 'In Progress', tasks: filteredInProg },
+                      { col: 'done' as const,        label: 'Done',        tasks: filteredDone },
+                    ]).map(({ col, label, tasks }) => (
+                      <div key={col} className="rounded p-4" style={{ border: `1px solid ${NOTION.border}`, backgroundColor: NOTION.sidebar }}>
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: NOTION.muted }}>
+                            {label} <span className="ml-1">{tasks.length}</span>
+                          </span>
+                          <button onClick={() => { setAddingToCol(col); setNewTaskTitle('') }}
+                            className="rounded px-2 py-0.5 text-xs transition hover:bg-[#E5E5E3]"
+                            style={{ color: NOTION.muted }}>
+                            + Add
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          {tasks.map(task => {
+                            const pStyle = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE.medium
+                            const pText  = PRIORITY_TEXT[task.priority]  || PRIORITY_TEXT.medium
+                            const tTag   = taskTypeTag(task.task_type)
+                            return (
+                              <div key={task.id} className="rounded p-3"
+                                style={{
+                                  backgroundColor: NOTION.bg,
+                                  border: `1px solid ${NOTION.border}`,
+                                  borderLeft: `3px solid ${col === 'done' ? NOTION.border : pStyle.border}`,
+                                }}>
+                                <div className="mb-2 text-sm leading-snug" style={{ color: NOTION.text }}>{task.title}</div>
+                                <div className="mb-2 flex flex-wrap gap-1">
+                                  <button onClick={() => cycleTaskType(task)} title="Click to change type"
+                                    className="rounded px-1.5 py-0.5 text-xs font-medium transition hover:opacity-70"
+                                    style={{ backgroundColor: tTag.bg, color: tTag.text }}>
+                                    {tTag.label}
+                                  </button>
+                                  <span className="rounded px-1.5 py-0.5 text-xs font-medium"
+                                    style={{ backgroundColor: col === 'done' ? NOTION.hover : pStyle.badge, color: col === 'done' ? NOTION.muted : pText }}>
+                                    {pStyle.label}
+                                  </span>
+                                  <span className="rounded px-1.5 py-0.5 text-xs"
+                                    style={{ backgroundColor: NOTION.hover, color: NOTION.muted }}>
+                                    {task.estimated_minutes}m
+                                  </span>
+                                </div>
+                                <div className="flex gap-1">
+                                  {col !== 'todo' && (
+                                    <button onClick={() => moveTask(task, 'todo')} className="rounded px-2 py-0.5 text-xs hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>← To Do</button>
+                                  )}
+                                  {col !== 'in_progress' && (
+                                    <button onClick={() => moveTask(task, 'in_progress')} className="rounded px-2 py-0.5 text-xs hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>
+                                      {col === 'todo' ? 'Start →' : '← WIP'}
+                                    </button>
+                                  )}
+                                  {col !== 'done' && (
+                                    <button onClick={() => moveTask(task, 'done')} className="rounded px-2 py-0.5 text-xs hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>Done ✓</button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                          {tasks.length === 0 && addingToCol !== col && (
+                            <div className="py-4 text-center text-xs" style={{ color: NOTION.muted }}>
+                              {boardTypeFilter !== 'all' || boardPriorityFilter !== 'all' ? 'No matching tasks' : 'Empty'}
+                            </div>
+                          )}
+
+                          {/* Inline add form for this column */}
+                          {addingToCol === col && (
+                            <div className="rounded p-2 space-y-1.5" style={{ border: `1px solid ${NOTION.border}`, backgroundColor: NOTION.bg }}>
+                              <input autoFocus placeholder="Task title" value={newTaskTitle}
+                                onChange={e => setNewTaskTitle(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') addTask(col); if (e.key === 'Escape') setAddingToCol(null) }}
+                                className="w-full rounded px-2 py-1.5 text-xs focus:outline-none"
+                                style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }} />
+                              <div className="flex gap-1 flex-wrap">
+                                <select value={newTaskType} onChange={e => setNewTaskType(e.target.value)}
+                                  className="flex-1 rounded px-1.5 py-1 text-xs focus:outline-none"
+                                  style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }}>
+                                  <option value="study">📘 Theory</option>
+                                  <option value="practice">🏋️ Practice</option>
+                                  <option value="review">🔁 Revision</option>
+                                </select>
+                                <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)}
+                                  className="flex-1 rounded px-1.5 py-1 text-xs focus:outline-none"
+                                  style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }}>
+                                  <option value="high">High</option>
+                                  <option value="medium">Med</option>
+                                  <option value="low">Low</option>
+                                </select>
+                                <input type="number" value={newTaskMinutes} onChange={e => setNewTaskMinutes(e.target.value)}
+                                  min={5} max={240} placeholder="25"
+                                  className="w-14 rounded px-1.5 py-1 text-xs focus:outline-none"
+                                  style={{ border: `1px solid ${NOTION.border}`, color: NOTION.text, backgroundColor: '#fff' }} />
+                              </div>
+                              <div className="flex gap-1">
+                                <button onClick={() => addTask(col)} disabled={savingTask || !newTaskTitle.trim()}
+                                  className="rounded px-2.5 py-1 text-xs font-medium text-white disabled:opacity-40"
+                                  style={{ backgroundColor: NOTION.text }}>
+                                  {savingTask ? '…' : 'Add'}
+                                </button>
+                                <button onClick={() => setAddingToCol(null)}
+                                  className="rounded px-2.5 py-1 text-xs transition hover:bg-[#EFEFED]"
+                                  style={{ color: NOTION.muted }}>
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </>
@@ -679,7 +952,7 @@ export default function Dashboard() {
                         missed.length ? `Did not finish: ${missed.join(', ')}. Reschedule these into the plan from tomorrow.` : '',
                         eodNotes ? `User notes: ${eodNotes}` : '',
                       ].filter(Boolean).join(' ')
-                      await api.fullReschedule(userId, feedback)
+                      await api.fullReschedule(userId, feedback, { interleave_courses: rescheduleInterleave })
                       // Refresh both today's plan and stats
                       const [plan, statsData] = await Promise.all([
                         api.getTodayPlan(userId).catch(() => ({ tasks: [] })),
