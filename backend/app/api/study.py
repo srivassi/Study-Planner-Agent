@@ -283,7 +283,7 @@ def _load_reschedule_context(user_id: str, sessions_per_day_override=None):
     }
 
 
-def _build_claude_prompt(ctx: dict, feedback: str) -> str:
+def _build_claude_prompt(ctx: dict, feedback: str, interleave_courses: bool = True) -> str:
     capacity_lines = []
     for r in ctx["capacity"]:
         status = "🚨 OVERFLOW" if r["is_overflowing"] else ("⚠️ TIGHT" if r["is_tight"] else "✅ ok")
@@ -301,10 +301,12 @@ def _build_claude_prompt(ctx: dict, feedback: str) -> str:
                 f"  [{cname}][{t.get('priority','medium')}] {t['title']} ({t['estimated_minutes']}m)"
             )
 
+    interleave_label = "mix all modules each day (interleaved)" if interleave_courses else "dedicate each day to a single module (one module per day)"
     return f"""You are an intelligent study schedule planner. Replan a student's remaining study tasks across multiple courses.
 
 TODAY: {ctx['today'].isoformat()}
 CURRENT SETTING: {ctx['base_ppd']} tasks/day (pomodoro: {ctx['pomodoro_minutes']}m each)
+TASK DISTRIBUTION: {interleave_label}
 DISRUPTIONS (blocked days): {', '.join(f"{d['start_date']}→{d['end_date']}" for d in ctx['disruptions']) or 'none'}
 
 COURSE CAPACITY ANALYSIS:
@@ -384,7 +386,7 @@ def reschedule_preview(body: FullRescheduleRequest):
 
     try:
         client = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        prompt = _build_claude_prompt(ctx, body.feedback or "")
+        prompt = _build_claude_prompt(ctx, body.feedback or "", body.interleave_courses)
         msg = client.messages.create(
             model="claude-opus-4-6",
             max_tokens=4000,
@@ -426,7 +428,7 @@ def full_reschedule(body: FullRescheduleRequest):
         # No pre-computed directives — run Claude now
         try:
             client = _anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-            prompt = _build_claude_prompt(ctx, body.feedback or "")
+            prompt = _build_claude_prompt(ctx, body.feedback or "", body.interleave_courses)
             msg = client.messages.create(
                 model="claude-opus-4-6",
                 max_tokens=8000,
@@ -453,6 +455,7 @@ def full_reschedule(body: FullRescheduleRequest):
         sessions_per_day=ctx["sessions_per_day"],
         session_duration_minutes=ctx["session_duration_minutes"],
         tasks_per_day_override=ctx.get("tasks_per_day_override", {}),
+        interleave_courses=body.interleave_courses,
     )
 
     for t in scheduled:

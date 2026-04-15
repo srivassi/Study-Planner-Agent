@@ -952,7 +952,7 @@ export default function Dashboard() {
                         missed.length ? `Did not finish: ${missed.join(', ')}. Reschedule these into the plan from tomorrow.` : '',
                         eodNotes ? `User notes: ${eodNotes}` : '',
                       ].filter(Boolean).join(' ')
-                      await api.fullReschedule(userId, feedback)
+                      await api.fullReschedule(userId, feedback, { interleave_courses: rescheduleInterleave })
                       // Refresh both today's plan and stats
                       const [plan, statsData] = await Promise.all([
                         api.getTodayPlan(userId).catch(() => ({ tasks: [] })),
