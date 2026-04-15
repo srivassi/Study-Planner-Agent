@@ -96,6 +96,9 @@ export default function Dashboard() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewSummary, setPreviewSummary] = useState('')
   const [previewDirectives, setPreviewDirectives] = useState<any>(null)
+  const [overflowCourses, setOverflowCourses] = useState<string[]>([])
+  const [mergeSuggestions, setMergeSuggestions] = useState<any[]>([])
+  const [overflowStrategy, setOverflowStrategy] = useState<'merge' | 'defer' | 'keep_all'>('defer')
   const [showEOD, setShowEOD] = useState(false)
   const [eodChecked, setEodChecked] = useState<Set<string>>(new Set())
   const [eodNotes, setEodNotes] = useState('')
@@ -1021,7 +1024,7 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="mt-4 flex justify-end gap-2">
-                  <button onClick={() => { setShowRescheduleModal(false); setRescheduleFeedback(''); setRescheduleError(''); setRescheduleSessionsOverride(''); setPreviewSummary(''); setPreviewDirectives(null) }}
+                  <button onClick={() => { setShowRescheduleModal(false); setRescheduleFeedback(''); setRescheduleError(''); setRescheduleSessionsOverride(''); setPreviewSummary(''); setPreviewDirectives(null); setOverflowCourses([]); setMergeSuggestions([]); setOverflowStrategy('defer') }}
                     className="rounded px-4 py-2 text-sm transition hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>
                     Cancel
                   </button>
@@ -1038,6 +1041,10 @@ export default function Dashboard() {
                         })
                         setPreviewSummary(result.summary)
                         setPreviewDirectives(result.directives)
+                        setOverflowCourses(result.overflow_courses || [])
+                        setMergeSuggestions(result.merge_suggestions || [])
+                        if (result.merge_suggestions?.length > 0) setOverflowStrategy('merge')
+                        else setOverflowStrategy('defer')
                       } catch (e: any) {
                         setRescheduleError(e?.message || 'Could not generate preview')
                       } finally { setPreviewLoading(false) }
@@ -1051,9 +1058,45 @@ export default function Dashboard() {
             ) : (
               /* ── Step 2: confirm ── */
               <>
-                <div className="mb-5 mt-2 rounded-lg p-4 text-sm leading-relaxed" style={{ backgroundColor: '#FAFAF9', border: `1px solid ${NOTION.border}`, color: NOTION.text }}>
+                <div className="mb-4 mt-2 rounded-lg p-4 text-sm leading-relaxed" style={{ backgroundColor: '#FAFAF9', border: `1px solid ${NOTION.border}`, color: NOTION.text }}>
                   {previewSummary}
                 </div>
+
+                {/* Overflow warning */}
+                {overflowCourses.length > 0 && (
+                  <div className="mb-4 rounded-lg p-4 text-sm" style={{ backgroundColor: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                    <p className="mb-2 font-medium" style={{ color: '#92400E' }}>
+                      ⚠️ Too many tasks for the time available
+                    </p>
+                    <p className="mb-3 text-xs" style={{ color: '#B45309' }}>
+                      {overflowCourses.join(', ')} {overflowCourses.length === 1 ? 'has' : 'have'} more tasks than can fit before the exam at your current pace. What should Claude do?
+                    </p>
+                    <div className="space-y-2">
+                      {mergeSuggestions.length > 0 && (
+                        <label className="flex cursor-pointer items-start gap-2">
+                          <input type="radio" name="overflow" value="merge" checked={overflowStrategy === 'merge'} onChange={() => setOverflowStrategy('merge')} className="mt-0.5" />
+                          <div>
+                            <span className="font-medium" style={{ color: '#92400E' }}>Combine similar tasks</span>
+                            <ul className="mt-1 space-y-0.5 text-xs" style={{ color: '#B45309' }}>
+                              {mergeSuggestions.map((m: any, i: number) => (
+                                <li key={i}>• {m.source_titles.join(' + ')} → <span className="font-medium">{m.merged_title}</span> ({m.estimated_minutes}min)</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </label>
+                      )}
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input type="radio" name="overflow" value="defer" checked={overflowStrategy === 'defer'} onChange={() => setOverflowStrategy('defer')} />
+                        <span style={{ color: '#92400E' }}>Defer low-priority tasks to after the exam</span>
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-2">
+                        <input type="radio" name="overflow" value="keep_all" checked={overflowStrategy === 'keep_all'} onChange={() => setOverflowStrategy('keep_all')} />
+                        <span style={{ color: '#92400E' }}>Keep all tasks (some will appear after exam date)</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 <p className="mb-4 text-xs" style={{ color: NOTION.muted }}>
                   Apply this plan? You can go back to adjust your feedback.
                 </p>
@@ -1063,7 +1106,7 @@ export default function Dashboard() {
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => { setPreviewSummary(''); setPreviewDirectives(null); setRescheduleError('') }}
+                  <button onClick={() => { setPreviewSummary(''); setPreviewDirectives(null); setRescheduleError(''); setOverflowCourses([]); setMergeSuggestions([]) }}
                     className="rounded px-4 py-2 text-sm transition hover:bg-[#EFEFED]" style={{ color: NOTION.muted }}>
                     ← Back
                   </button>
@@ -1078,6 +1121,7 @@ export default function Dashboard() {
                           interleave_courses: rescheduleInterleave,
                           sessions_per_day_override: rescheduleSessionsOverride ? parseInt(rescheduleSessionsOverride) : undefined,
                           directives: previewDirectives,
+                          overflow_strategy: overflowStrategy,
                         })
                         const plan = await api.getTodayPlan(userId).catch(() => ({ tasks: [] }))
                         setTodayTasks(plan.tasks || [])
@@ -1086,6 +1130,9 @@ export default function Dashboard() {
                         setRescheduleSessionsOverride('')
                         setPreviewSummary('')
                         setPreviewDirectives(null)
+                        setOverflowCourses([])
+                        setMergeSuggestions([])
+                        setOverflowStrategy('defer')
                         setRescheduleSuccess(true)
                         setTimeout(() => setRescheduleSuccess(false), 3000)
                       } catch (e: any) {

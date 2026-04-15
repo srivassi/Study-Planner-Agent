@@ -176,11 +176,12 @@ def generate_schedule_multi_course(
         if not available:
             available = [start_date]
 
-        required_ppd = max(base_ppd, -(-len(tasks) // max(len(available), 1)))  # ceiling div
-        ppd = min(required_ppd, 12)
-
+        # Respect the user's configured tasks/day as a hard cap.
+        # tasks_per_day_override (from Claude directives) can raise it for tight courses.
+        ppd = base_ppd
         if tasks_per_day_override and cid in tasks_per_day_override:
             ppd = tasks_per_day_override[cid]
+        ppd = min(max(ppd, 1), 12)
 
         days_to_exam = (exam_date - start_date).days
         urgency = 1.0 / max(days_to_exam, 1)
@@ -316,18 +317,28 @@ def _calc_pomodoros_per_day(
 
 
 def _pack_tasks(tasks: List[Dict], available_days: List[date], pomodoros_per_day: int) -> List[Dict]:
-    """Assign scheduled_date + order_index sequentially into available_days."""
+    """
+    Assign scheduled_date + order_index sequentially into available_days.
+    If tasks overflow the available days, continue scheduling day-by-day past
+    the last available day so overflow is visible on the calendar rather than
+    silently piling onto the last pre-exam day.
+    """
     scheduled = []
     day_idx = 0
     slot_in_day = 0
+    last_day = available_days[-1] if available_days else date.today()
 
     for task in tasks:
-        if day_idx >= len(available_days):
-            day_idx = len(available_days) - 1
+        if day_idx < len(available_days):
+            current_day = available_days[day_idx]
+        else:
+            # Overflow: continue past the last available day, one calendar day at a time
+            overflow_offset = day_idx - len(available_days) + 1
+            current_day = last_day + timedelta(days=overflow_offset)
 
         scheduled.append({
             **task,
-            "scheduled_date": available_days[day_idx].isoformat() if available_days else date.today().isoformat(),
+            "scheduled_date": current_day.isoformat(),
             "order_index": slot_in_day,
         })
 

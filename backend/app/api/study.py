@@ -43,6 +43,7 @@ class FullRescheduleRequest(BaseModel):
     interleave_courses: bool = True
     sessions_per_day_override: Optional[int] = None
     directives: Optional[dict] = None   # pre-computed from /reschedule-preview
+    overflow_strategy: str = "defer"    # "merge" | "defer" | "keep_all"
 
 
 # ─── Pomodoro ───────────────────────────────────────────────
@@ -317,20 +318,27 @@ REMAINING TASKS (up to 30 per course):
 
 USER FEEDBACK: "{feedback or 'None — replan intelligently based on time pressure above.'}"
 
+IMPORTANT CONSTRAINT: The student cannot study more than {ctx['base_ppd']} tasks/day — this is a hard limit based on their available hours. Do NOT suggest increasing tasks_per_day beyond this number. The student cannot manufacture extra time.
+
 Your job:
-1. Identify which courses are time-critical (tight or overflowing) and prioritise their tasks first each day.
-2. For TIGHT/OVERFLOW courses, increase their tasks_per_day so they actually finish before the exam.
-3. For comfortable courses, keep the standard pace.
-4. If a course is overflowing (can't possibly fit at 12 tasks/day), prioritise HIGH priority tasks only and mark low-priority ones as deferred.
-5. Honour the user's feedback if given (e.g. "focus on X", "start from date Y", "drop low priority Z tasks").
+1. Identify which courses are time-critical (tight or overflowing).
+2. For tight/overflowing courses, reorder tasks so the highest-priority ones come first — the student should complete what matters most before the exam.
+3. For courses that cannot fit all tasks within the hard limit before the exam, identify overflow tasks (low-priority ones that won't fit) and:
+   a. Suggest merging similar/related tasks where it makes sense (e.g. two short "Read ChX" tasks → one combined task). Be specific — only suggest merges that genuinely save time.
+   b. Flag which tasks should be deferred if the student chooses not to merge.
+4. Do NOT increase tasks_per_day beyond {ctx['base_ppd']}.
+5. Honour the user's feedback if given.
 
 Return a JSON object with these fields:
-- "start_date": ISO date string (when to begin scheduling — today unless user said otherwise)
-- "sessions_per_day": integer or null (global override if user asked)
-- "tasks_per_day_per_course": object mapping course name to integer tasks/day
-- "defer_task_titles": array of task titles to push to the end (low-priority overflow tasks)
+- "start_date": ISO date string (today unless user said otherwise)
+- "sessions_per_day": integer or null (only if user explicitly asked)
+- "tasks_per_day_per_course": object mapping course name to integer tasks/day (must not exceed {ctx['base_ppd']})
+- "defer_task_titles": array of task titles to push to the end (overflow low-priority tasks)
 - "task_order_per_course": object mapping course name to ordered array of task titles (most important first)
-- "summary": 2-3 sentence plain-English explanation of what you decided and why (shown to the user before they confirm)
+- "merge_suggestions": array of merge objects — only include if there are genuinely useful merges:
+    [{{"course_name": "...", "merged_title": "...", "source_titles": ["task A", "task B"], "estimated_minutes": 40, "priority": "high"}}]
+- "overflow_courses": array of course names that have more tasks than can fit before their exam at {ctx['base_ppd']} tasks/day
+- "summary": 2-3 sentence plain-English explanation shown to the user before they confirm
 
 Return raw JSON only, no markdown fences."""
 
@@ -352,7 +360,8 @@ def _apply_directives(directives: dict, ctx: dict):
     for cname, ppd in tpd_map.items():
         cid = name_to_id.get(cname)
         if cid:
-            tasks_per_day_override[cid] = max(1, int(ppd))
+            # Hard cap at the user's base tasks/day — cannot exceed their available hours
+            tasks_per_day_override[cid] = min(max(1, int(ppd)), ctx["base_ppd"])
 
     order_map = directives.get("task_order_per_course", {})
     for cname, ordered_titles in order_map.items():
@@ -361,12 +370,39 @@ def _apply_directives(directives: dict, ctx: dict):
             title_idx = {title: i for i, title in enumerate(ordered_titles)}
             ctx["tasks_by_course"][cid].sort(key=lambda t: title_idx.get(t["title"], 999))
 
-    defer_set = set(directives.get("defer_task_titles", []))
-    if defer_set:
-        for cid in ctx["tasks_by_course"]:
-            normal = [t for t in ctx["tasks_by_course"][cid] if t["title"] not in defer_set]
-            deferred = [t for t in ctx["tasks_by_course"][cid] if t["title"] in defer_set]
-            ctx["tasks_by_course"][cid] = normal + deferred
+    # Apply merge suggestions when user chose the "merge" strategy
+    if ctx.get("overflow_strategy") == "merge":
+        for merge in directives.get("merge_suggestions", []):
+            cname = merge.get("course_name", "")
+            cid = name_to_id.get(cname)
+            if not cid or cid not in ctx["tasks_by_course"]:
+                continue
+            source_titles = set(merge.get("source_titles", []))
+            course_tasks = ctx["tasks_by_course"][cid]
+            sources = [t for t in course_tasks if t["title"] in source_titles]
+            if len(sources) < 2:
+                continue
+            # Survivor = first source task with updated title/minutes; rest flagged for deletion
+            survivor = dict(sources[0])
+            survivor["title"] = merge["merged_title"]
+            survivor["estimated_minutes"] = merge.get("estimated_minutes", survivor["estimated_minutes"])
+            survivor["priority"] = merge.get("priority", survivor["priority"])
+            survivor["_merged_from"] = [t["id"] for t in sources[1:]]
+            # Replace all source tasks with the single merged task
+            ctx["tasks_by_course"][cid] = [
+                survivor if t["id"] == sources[0]["id"] else t
+                for t in course_tasks
+                if t["title"] not in source_titles or t["id"] == sources[0]["id"]
+            ]
+
+    # Defer overflow tasks to the back of the queue (when strategy is "defer" or default)
+    if ctx.get("overflow_strategy") != "keep_all":
+        defer_set = set(directives.get("defer_task_titles", []))
+        if defer_set:
+            for cid in ctx["tasks_by_course"]:
+                normal = [t for t in ctx["tasks_by_course"][cid] if t["title"] not in defer_set]
+                deferred = [t for t in ctx["tasks_by_course"][cid] if t["title"] in defer_set]
+                ctx["tasks_by_course"][cid] = normal + deferred
 
     ctx["tasks_per_day_override"] = tasks_per_day_override
     return ctx
@@ -397,7 +433,12 @@ def reschedule_preview(body: FullRescheduleRequest):
         if obj_match:
             directives = json.loads(obj_match.group(0))
             summary = directives.get("summary", "Schedule will be updated based on your exam deadlines.")
-            return {"summary": summary, "directives": directives}
+            return {
+                "summary": summary,
+                "directives": directives,
+                "overflow_courses": directives.get("overflow_courses", []),
+                "merge_suggestions": directives.get("merge_suggestions", []),
+            }
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Preview error: {e}")
@@ -442,6 +483,7 @@ def full_reschedule(body: FullRescheduleRequest):
             traceback.print_exc()
             # Non-fatal — schedule with defaults
 
+    ctx["overflow_strategy"] = body.overflow_strategy
     ctx = _apply_directives(directives, ctx)
 
     # ── Per-course deadline-aware scheduling ─────────────────
@@ -459,9 +501,18 @@ def full_reschedule(body: FullRescheduleRequest):
     )
 
     for t in scheduled:
-        supabase.table("tasks").update({
+        update_payload = {
             "scheduled_date": t.get("scheduled_date"),
             "order_index": t.get("order_index", 0),
-        }).eq("id", t["id"]).execute()
+        }
+        # If this task absorbed others (merge strategy), update its title/minutes too
+        if t.get("_merged_from"):
+            update_payload["title"] = t["title"]
+            update_payload["estimated_minutes"] = t["estimated_minutes"]
+            update_payload["priority"] = t.get("priority", "medium")
+            # Delete the tasks that were merged away
+            for dead_id in t["_merged_from"]:
+                supabase.table("tasks").delete().eq("id", dead_id).execute()
+        supabase.table("tasks").update(update_payload).eq("id", t["id"]).execute()
 
     return {"updated": len(scheduled)}
