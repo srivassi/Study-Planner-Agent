@@ -186,21 +186,26 @@ def chat_on_note(body: ChatMessage):
     if body.pdf_url and HAS_PYPDF:
         try:
             import requests as _requests
-            r = _requests.get(body.pdf_url, timeout=10)
+            r = _requests.get(body.pdf_url, timeout=15)
             reader = pypdf.PdfReader(io.BytesIO(r.content))
-            if body.page_number and body.page_number <= len(reader.pages):
-                pages_to_extract = range(
-                    max(0, body.page_number - 2),
-                    min(len(reader.pages), body.page_number + 1)
+            all_pages = [reader.pages[i].extract_text() or "" for i in range(len(reader.pages))]
+
+            if body.page_number and body.page_number <= len(all_pages):
+                # Put the annotated page first so it's never cut off by truncation,
+                # then append remaining pages in order
+                idx = body.page_number - 1
+                ordered = (
+                    [f"[Page {body.page_number} — annotated]\n{all_pages[idx]}"] +
+                    [f"[Page {i + 1}]\n{all_pages[i]}" for i in range(len(all_pages)) if i != idx]
                 )
-                pdf_text = "\n".join(reader.pages[i].extract_text() or "" for i in pages_to_extract)
             else:
-                pdf_text = "\n".join(p.extract_text() or "" for p in reader.pages[:3])
+                ordered = [f"[Page {i + 1}]\n{all_pages[i]}" for i in range(len(all_pages))]
+
+            pdf_text = "\n\n".join(ordered)
             if pdf_text.strip():
                 system_prompt += (
-                    f"\n\nHere is the relevant content from the student's PDF"
-                    f"{f' (page {body.page_number})' if body.page_number else ''}:\n\n"
-                    f"{pdf_text[:4000]}"
+                    f"\n\nFull content of the student's PDF ({len(all_pages)} pages):\n\n"
+                    f"{pdf_text[:40000]}"
                 )
         except Exception:
             pass
