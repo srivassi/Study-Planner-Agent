@@ -14,12 +14,17 @@ class TaskCreate(BaseModel):
     estimated_minutes: int = 25
     priority: str = "medium"
     task_type: str = "study"
+    status: str = "todo"
     scheduled_date: Optional[str] = None
     order_index: int = 0
 
 
 class TaskStatusUpdate(BaseModel):
     status: str  # todo | in_progress | done
+
+
+class TaskTypeUpdate(BaseModel):
+    task_type: str  # study | practice | review | assessment
 
 
 class TaskReorder(BaseModel):
@@ -79,6 +84,15 @@ def update_task_status(task_id: str, body: TaskStatusUpdate):
         from datetime import datetime
         update["completed_at"] = datetime.utcnow().isoformat()
     result = supabase.table("tasks").update(update).eq("id", task_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return result.data[0]
+
+
+@router.patch("/{task_id}/type")
+def update_task_type(task_id: str, body: TaskTypeUpdate):
+    supabase = get_supabase_client()
+    result = supabase.table("tasks").update({"task_type": body.task_type}).eq("id", task_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Task not found")
     return result.data[0]
