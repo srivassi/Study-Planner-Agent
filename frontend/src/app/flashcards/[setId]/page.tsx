@@ -213,7 +213,12 @@ export default function StudyPage() {
   const restartReview = () => {
     const reviewCards = cards.filter(c => review.has(c.id))
     if (reviewCards.length === 0) return
-    restart(reviewCards)
+    setCards(reviewCards)
+    setCurrentIndex(0)
+    setFlipped(false)
+    setDone(false)
+    setMastered(new Set())
+    setReview(new Set())
   }
 
   const toggleShuffle = () => {
