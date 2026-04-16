@@ -98,17 +98,19 @@ export default function StudyPage() {
   const { setId } = useParams<{ setId: string }>()
 
   const [set, setSet] = useState<FlashcardSet | null>(null)
-  const [cards, setCards] = useState<Flashcard[]>([])
+  const [allCards, setAllCards] = useState<Flashcard[]>([])   // canonical order
+  const [cards, setCards] = useState<Flashcard[]>([])          // active deck (may be shuffled / filtered)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [flipped, setFlipped] = useState(false)
+  const [animating, setAnimating] = useState(false)
   const [loading, setLoading] = useState(true)
   const [mastered, setMastered] = useState<Set<string>>(new Set())
   const [review, setReview] = useState<Set<string>>(new Set())
   const [done, setDone] = useState(false)
+  const [shuffled, setShuffled] = useState(false)
 
   // Edit mode
   const [editing, setEditing] = useState(false)
-  const [editCards, setEditCards] = useState<Flashcard[]>([])
   const [saving, setSaving] = useState(false)
   const [addingCard, setAddingCard] = useState(false)
   const [newQ, setNewQ] = useState('')
@@ -122,27 +124,66 @@ export default function StudyPage() {
         api.getFlashcards(setId).catch(() => []),
       ])
       setSet(setData)
+      setAllCards(cardsData)
       setCards(cardsData)
-      setEditCards(cardsData)
+      // Restore progress from DB statuses
+      const m = new Set<string>(cardsData.filter((c: Flashcard) => c.status === 'mastered').map((c: Flashcard) => c.id))
+      const r = new Set<string>(cardsData.filter((c: Flashcard) => c.status === 'review').map((c: Flashcard) => c.id))
+      setMastered(m)
+      setReview(r)
+      // Resume: start at first card that isn't mastered yet
+      const firstUnmastered = cardsData.findIndex((c: Flashcard) => c.status !== 'mastered')
+      setCurrentIndex(firstUnmastered >= 0 ? firstUnmastered : 0)
       setLoading(false)
     })
   }, [setId, router])
 
   const currentCard = cards[currentIndex]
 
+  // ── Keyboard shortcuts ─────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (editing || done || animating) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === ' ') { e.preventDefault(); setFlipped(f => !f) }
+      if (e.key === 'ArrowRight') { e.preventDefault(); if (flipped) handleGotIt(); else skipCard() }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); if (flipped) handleNeedReview() }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [editing, done, animating, flipped, currentCard])
+
+  const persistStatus = (cardId: string, status: 'mastered' | 'review') => {
+    api.updateFlashcard(cardId, { status }).catch(() => {})
+    // Update both decks
+    const patch = (arr: Flashcard[]) => arr.map(c => c.id === cardId ? { ...c, status } : c)
+    setCards(patch)
+    setAllCards(patch)
+  }
+
   const handleGotIt = () => {
+    if (!currentCard || animating) return
+    persistStatus(currentCard.id, 'mastered')
     setMastered(prev => new Set([...prev, currentCard.id]))
     setReview(prev => { const n = new Set(prev); n.delete(currentCard.id); return n })
     advance()
   }
 
   const handleNeedReview = () => {
+    if (!currentCard || animating) return
+    persistStatus(currentCard.id, 'review')
     setReview(prev => new Set([...prev, currentCard.id]))
     setMastered(prev => { const n = new Set(prev); n.delete(currentCard.id); return n })
     advance()
   }
 
+  const skipCard = () => {
+    if (animating) return
+    advance()
+  }
+
   const advance = () => {
+    setAnimating(true)
     setFlipped(false)
     setTimeout(() => {
       if (currentIndex < cards.length - 1) {
@@ -150,33 +191,46 @@ export default function StudyPage() {
       } else {
         setDone(true)
       }
-    }, 150)
+      setAnimating(false)
+    }, 200)
   }
 
-  const restart = () => {
+  const restart = (deckOverride?: Flashcard[]) => {
+    const deck = deckOverride ?? allCards
+    setCards(deck)
     setCurrentIndex(0)
     setFlipped(false)
     setDone(false)
-    setMastered(new Set())
-    setReview(new Set())
+    if (!deckOverride) {
+      // Full restart — clear all statuses in DB
+      allCards.forEach(c => { if (c.status) api.updateFlashcard(c.id, { status: 'new' }).catch(() => {}) })
+      setMastered(new Set())
+      setReview(new Set())
+      setAllCards(prev => prev.map(c => ({ ...c, status: 'new' as const })))
+    }
   }
 
   const restartReview = () => {
     const reviewCards = cards.filter(c => review.has(c.id))
     if (reviewCards.length === 0) return
-    setCards(reviewCards)
+    restart(reviewCards)
+  }
+
+  const toggleShuffle = () => {
+    const next = shuffled ? [...allCards] : [...allCards].sort(() => Math.random() - 0.5)
+    setCards(next)
     setCurrentIndex(0)
     setFlipped(false)
-    setDone(false)
-    setMastered(new Set())
-    setReview(new Set())
+    setShuffled(s => !s)
   }
 
   // Edit handlers
   const handleSaveEdit = async (card: Flashcard) => {
     setSaving(true)
     await api.updateFlashcard(card.id, { question: card.question, answer: card.answer }).catch(() => {})
-    setCards(prev => prev.map(c => c.id === card.id ? card : c))
+    const patch = (arr: Flashcard[]) => arr.map(c => c.id === card.id ? card : c)
+    setCards(patch)
+    setAllCards(patch)
     setSaving(false)
   }
 
@@ -184,16 +238,16 @@ export default function StudyPage() {
     if (!confirm('Delete this card?')) return
     await api.deleteFlashcard(cardId).catch(() => {})
     setCards(prev => prev.filter(c => c.id !== cardId))
-    setEditCards(prev => prev.filter(c => c.id !== cardId))
+    setAllCards(prev => prev.filter(c => c.id !== cardId))
   }
 
   const handleAddCard = async () => {
     if (!newQ.trim() || !newA.trim()) return
     setSaving(true)
     try {
-      const card = await api.addFlashcard({ set_id: setId, question: newQ.trim(), answer: newA.trim(), order_index: cards.length })
+      const card = await api.addFlashcard({ set_id: setId, question: newQ.trim(), answer: newA.trim(), order_index: allCards.length })
       setCards(prev => [...prev, card])
-      setEditCards(prev => [...prev, card])
+      setAllCards(prev => [...prev, card])
       setNewQ('')
       setNewA('')
       setAddingCard(false)
@@ -209,7 +263,8 @@ export default function StudyPage() {
     )
   }
 
-  const progress = cards.length > 0 ? ((mastered.size + review.size) / cards.length) * 100 : 0
+  const masteredPct = cards.length > 0 ? (mastered.size / cards.length) * 100 : 0
+  const reviewPct   = cards.length > 0 ? (review.size  / cards.length) * 100 : 0
 
   return (
     <div className="min-h-screen" style={{ fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", backgroundColor: NOTION.bg }}>
@@ -220,7 +275,7 @@ export default function StudyPage() {
           <div>
             <button onClick={() => router.back()} className="mb-1 text-sm" style={{ color: NOTION.muted }}>← Back</button>
             <h1 className="text-xl font-bold" style={{ color: NOTION.text }}>{set?.title}</h1>
-            <div className="mt-1 text-sm" style={{ color: NOTION.muted }}>{cards.length} cards</div>
+            <div className="mt-1 text-sm" style={{ color: NOTION.muted }}>{allCards.length} cards</div>
           </div>
           <div className="flex gap-2">
             <button
@@ -229,6 +284,14 @@ export default function StudyPage() {
               style={{ border: `1px solid ${NOTION.btnBorder}`, color: NOTION.text, backgroundColor: NOTION.btn }}>
               🏆 Jeopardy
             </button>
+            {!editing && (
+              <button
+                onClick={toggleShuffle}
+                className="rounded px-3 py-1.5 text-sm transition-colors"
+                style={{ border: `1px solid ${NOTION.btnBorder}`, color: NOTION.text, backgroundColor: shuffled ? NOTION.hover : NOTION.btn }}>
+                🔀{shuffled ? ' On' : ''}
+              </button>
+            )}
             <button
               onClick={() => setEditing(e => !e)}
               className="rounded px-3 py-1.5 text-sm transition-colors"
@@ -241,7 +304,7 @@ export default function StudyPage() {
         {/* Edit mode */}
         {editing ? (
           <div className="space-y-3">
-            {cards.map((card, i) => (
+            {allCards.map((card, i) => (
               <EditableCard
                 key={card.id}
                 card={card}
@@ -287,78 +350,126 @@ export default function StudyPage() {
             )}
           </div>
         ) : done ? (
-          /* Done screen */
+          /* ── Done screen ── */
           <div className="rounded-2xl border py-16 text-center" style={{ borderColor: NOTION.border }}>
-            <div className="mb-4 text-5xl">🎉</div>
-            <div className="mb-2 text-xl font-bold" style={{ color: NOTION.text }}>Session complete!</div>
-            <div className="mb-6 text-sm" style={{ color: NOTION.muted }}>
-              {mastered.size} mastered · {review.size} need review
+            <div className="mb-4 text-5xl">{mastered.size === cards.length ? '🎉' : '✅'}</div>
+            <div className="mb-2 text-xl font-bold" style={{ color: NOTION.text }}>Round complete!</div>
+            <div className="mb-1 text-sm" style={{ color: NOTION.muted }}>
+              <span style={{ color: '#16A34A', fontWeight: 600 }}>{mastered.size} know it</span>
+              {review.size > 0 && <> · <span style={{ color: '#DC2626', fontWeight: 600 }}>{review.size} still learning</span></>}
             </div>
-            <div className="flex justify-center gap-3">
-              <button onClick={restart} className="rounded px-4 py-2 text-sm font-medium" style={{ border: `1px solid ${NOTION.btnBorder}`, color: NOTION.text }}>
-                Restart all
-              </button>
+            <div className="mb-8 text-xs" style={{ color: 'rgba(55,53,47,0.4)' }}>Progress saved</div>
+            <div className="flex flex-wrap justify-center gap-3">
               {review.size > 0 && (
-                <button onClick={restartReview} className="rounded px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: '#37352F' }}>
-                  Review {review.size} cards
+                <button onClick={restartReview} className="rounded-lg px-5 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: '#37352F' }}>
+                  Study {review.size} still learning →
                 </button>
               )}
+              <button onClick={() => restart()} className="rounded-lg px-5 py-2.5 text-sm font-medium" style={{ border: `1px solid ${NOTION.btnBorder}`, color: NOTION.text }}>
+                Restart all
+              </button>
             </div>
           </div>
         ) : (
-          /* Study mode */
+          /* ── Study mode ── */
           <div>
-            {/* Progress bar */}
-            <div className="mb-6">
-              <div className="mb-1 flex justify-between text-xs" style={{ color: NOTION.muted }}>
-                <span>{currentIndex + 1} / {cards.length}</span>
-                <span>{mastered.size} mastered</span>
-              </div>
-              <div className="h-1.5 w-full rounded-full" style={{ backgroundColor: NOTION.border }}>
-                <div className="h-1.5 rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: '#22c55e' }} />
+            {/* Progress bar — 3 segments: mastered (green) + review (red) + remaining (gray) */}
+            <div className="mb-2 flex items-center justify-between text-xs" style={{ color: NOTION.muted }}>
+              <span className="font-medium" style={{ color: NOTION.text }}>{currentIndex + 1} <span style={{ fontWeight: 400 }}>/ {cards.length}</span></span>
+              <div className="flex items-center gap-3">
+                {mastered.size > 0 && <span style={{ color: '#16A34A' }}>✓ {mastered.size} know it</span>}
+                {review.size > 0  && <span style={{ color: '#DC2626' }}>↺ {review.size} learning</span>}
               </div>
             </div>
+            <div className="mb-6 flex h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: NOTION.border }}>
+              <div className="h-full transition-all" style={{ width: `${masteredPct}%`, backgroundColor: '#22c55e' }} />
+              <div className="h-full transition-all" style={{ width: `${reviewPct}%`, backgroundColor: '#f87171' }} />
+            </div>
 
-            {/* Flashcard */}
+            {/* ── Flip card ── */}
             {currentCard && (
               <div
-                onClick={() => setFlipped(f => !f)}
-                className="relative mb-6 cursor-pointer select-none rounded-2xl border p-10 text-center transition-all"
-                style={{
-                  borderColor: NOTION.border,
-                  backgroundColor: flipped ? '#FAFAF9' : NOTION.bg,
-                  minHeight: 240,
+                style={{ perspective: '1200px', marginBottom: 24, minHeight: 280 }}
+                onClick={() => !animating && setFlipped(f => !f)}
+              >
+                <div style={{
+                  position: 'relative',
+                  width: '100%',
+                  minHeight: 280,
+                  transformStyle: 'preserve-3d',
+                  transition: 'transform 0.42s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                  cursor: 'pointer',
                 }}>
-                <div className="absolute right-4 top-4 text-xs" style={{ color: NOTION.muted }}>
-                  {flipped ? 'Answer' : 'Question'} · click to flip
-                </div>
-                <div className="flex min-h-[160px] items-center justify-center">
-                  <div className="w-full text-base leading-relaxed" style={{ color: NOTION.text }}>
-                    {renderCardContent(flipped ? currentCard.answer : currentCard.question)}
+                  {/* Front — question */}
+                  <div style={{
+                    position: 'absolute', inset: 0, minHeight: 280,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden' as any,
+                    borderRadius: 16,
+                    border: `1px solid ${NOTION.border}`,
+                    backgroundColor: NOTION.bg,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    padding: '40px 40px 52px',
+                    userSelect: 'none',
+                  }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: NOTION.muted, marginBottom: 20 }}>Question</div>
+                    <div style={{ fontSize: 16, lineHeight: 1.65, color: NOTION.text, width: '100%', overflowY: 'auto' }}>
+                      {renderCardContent(currentCard.question)}
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 16, fontSize: 11, color: 'rgba(55,53,47,0.3)', display: 'flex', gap: 12 }}>
+                      <span>Space to flip</span>
+                      <span>→ to skip</span>
+                    </div>
+                  </div>
+
+                  {/* Back — answer */}
+                  <div style={{
+                    position: 'absolute', inset: 0, minHeight: 280,
+                    backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden' as any,
+                    transform: 'rotateY(180deg)',
+                    borderRadius: 16,
+                    border: '1px solid #86EFAC',
+                    backgroundColor: '#F0FDF4',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    padding: '40px 40px 52px',
+                    userSelect: 'none',
+                  }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#16A34A', marginBottom: 20 }}>Answer</div>
+                    <div style={{ fontSize: 16, lineHeight: 1.65, color: NOTION.text, width: '100%', overflowY: 'auto' }}>
+                      {renderCardContent(currentCard.answer)}
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 16, fontSize: 11, color: 'rgba(55,53,47,0.3)', display: 'flex', gap: 12 }}>
+                      <span>← Still learning</span>
+                      <span>→ Got it</span>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
             {/* Action buttons */}
-            {flipped && (
+            {flipped ? (
               <div className="flex gap-3">
                 <button
                   onClick={handleNeedReview}
                   className="flex-1 rounded-lg py-3 text-sm font-medium transition-colors"
-                  style={{ border: `1px solid #fca5a5`, backgroundColor: '#fef2f2', color: '#dc2626' }}>
-                  Need review
+                  style={{ border: '1px solid #fca5a5', backgroundColor: '#fef2f2', color: '#dc2626' }}>
+                  ← Still learning
                 </button>
                 <button
                   onClick={handleGotIt}
                   className="flex-1 rounded-lg py-3 text-sm font-medium transition-colors"
-                  style={{ border: `1px solid #86efac`, backgroundColor: '#f0fdf4', color: '#16a34a' }}>
-                  Got it!
+                  style={{ border: '1px solid #86efac', backgroundColor: '#f0fdf4', color: '#16a34a' }}>
+                  Got it! →
                 </button>
               </div>
-            )}
-            {!flipped && (
-              <div className="text-center text-sm" style={{ color: NOTION.muted }}>Click the card to reveal the answer</div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="text-sm" style={{ color: NOTION.muted }}>Click the card or press Space to flip</div>
+                <button onClick={skipCard} className="text-sm" style={{ color: 'rgba(55,53,47,0.4)' }}>Skip →</button>
+              </div>
             )}
           </div>
         )}
