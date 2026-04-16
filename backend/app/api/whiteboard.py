@@ -111,6 +111,24 @@ def upload_pdf(
     return {"pdf_url": pdf_url, "pdf_name": file.filename, "sections": sections}
 
 
+# ─── Extract sections from an existing PDF URL ───────────────
+
+class ExtractSectionsRequest(BaseModel):
+    pdf_url: str
+
+@router.post("/extract-sections")
+def extract_sections(body: ExtractSectionsRequest):
+    if not HAS_PYPDF:
+        return {"sections": []}
+    try:
+        import requests as _requests
+        r = _requests.get(body.pdf_url, timeout=20)
+        sections = _extract_pdf_sections(r.content)
+        return {"sections": sections}
+    except Exception:
+        return {"sections": []}
+
+
 # ─── Get whiteboard for a course ─────────────────────────────
 
 @router.get("/{course_id}")

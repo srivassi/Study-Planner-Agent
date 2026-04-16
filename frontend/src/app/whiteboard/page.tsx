@@ -218,6 +218,27 @@ function WhiteboardInner() {
     setPdfError(null)
   }, [activePageId])
 
+  // ── Auto-extract sections for pages that have a PDF but no sections ──
+  useEffect(() => {
+    if (!activePage?.pdf_url) return
+    if (activePage.sections !== undefined) return  // already extracted (even if empty array)
+    api.extractSections(activePage.pdf_url)
+      .then(({ sections }: { sections: any[] }) => {
+        const updatedPages = pages.map(p =>
+          p.id === activePage.id ? { ...p, sections } : p
+        )
+        setPages(updatedPages)
+        scheduleSave(notes, updatedPages)
+      })
+      .catch(() => {
+        // Mark as extracted (empty) so we don't retry
+        const updatedPages = pages.map(p =>
+          p.id === activePage.id ? { ...p, sections: [] } : p
+        )
+        setPages(updatedPages)
+      })
+  }, [activePage?.id, activePage?.pdf_url, activePage?.sections])
+
   // ── Focus rename input when editing ──────────────────────
   useEffect(() => {
     if (renamingPageId && renameInputRef.current) renameInputRef.current.focus()
@@ -591,6 +612,13 @@ function WhiteboardInner() {
           <div className="flex flex-col shrink-0 relative transition-all duration-200" style={{ width: sidebarCollapsed ? 0 : 220, borderRight: sidebarCollapsed ? 'none' : '1px solid #EDEDED', backgroundColor: '#FBFBFA', overflow: 'hidden' }}>
             <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #EDEDED', minWidth: 220 }}>
               <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'rgba(55,53,47,0.4)' }}>Pages</span>
+              <button
+                onClick={() => setSidebarCollapsed(true)}
+                className="rounded p-1 transition-colors hover:bg-[#EFEFED]"
+                style={{ color: 'rgba(55,53,47,0.4)', fontSize: 12, lineHeight: 1 }}
+                title="Hide sidebar">
+                ‹
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto py-1" style={{ minWidth: 220 }}>
@@ -700,26 +728,28 @@ function WhiteboardInner() {
             </div>
           </div>
 
-          {/* ── Sidebar toggle ── */}
-          <button
-            onClick={() => setSidebarCollapsed(c => !c)}
-            title={sidebarCollapsed ? 'Show pages' : 'Hide pages'}
-            className="absolute z-20 flex items-center justify-center rounded-r transition-colors hover:bg-[#EFEFED]"
-            style={{
-              left: sidebarCollapsed ? 0 : 220,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: 14,
-              height: 40,
-              backgroundColor: '#FBFBFA',
-              border: '1px solid #EDEDED',
-              borderLeft: sidebarCollapsed ? '1px solid #EDEDED' : 'none',
-              borderRadius: sidebarCollapsed ? '0 4px 4px 0' : '0 4px 4px 0',
-              color: 'rgba(55,53,47,0.4)',
-              fontSize: 9,
-            }}>
-            {sidebarCollapsed ? '›' : '‹'}
-          </button>
+          {/* ── Sidebar expand tab (only visible when collapsed) ── */}
+          {sidebarCollapsed && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              title="Show pages"
+              className="absolute z-20 flex items-center justify-center transition-colors hover:bg-[#EFEFED]"
+              style={{
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 20,
+                height: 48,
+                backgroundColor: '#FBFBFA',
+                border: '1px solid #EDEDED',
+                borderLeft: 'none',
+                borderRadius: '0 6px 6px 0',
+                color: 'rgba(55,53,47,0.5)',
+                fontSize: 13,
+              }}>
+              ›
+            </button>
+          )}
 
           {/* ── Main canvas ── */}
           <div className="relative flex flex-1 overflow-hidden">
