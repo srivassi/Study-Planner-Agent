@@ -153,6 +153,7 @@ function WhiteboardInner() {
   const [activePageId, setActivePageId] = useState<string | null>(null)
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const activePage = useMemo(() => pages.find(p => p.id === activePageId) || null, [pages, activePageId])
 
@@ -552,14 +553,14 @@ function WhiteboardInner() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 overflow-hidden">
+        <div className="relative flex flex-1 overflow-hidden">
           {/* ── Left sidebar: pages ── */}
-          <div className="flex flex-col shrink-0" style={{ width: 220, borderRight: '1px solid #EDEDED', backgroundColor: '#FBFBFA' }}>
-            <div className="px-4 py-3" style={{ borderBottom: '1px solid #EDEDED' }}>
+          <div className="flex flex-col shrink-0 relative transition-all duration-200" style={{ width: sidebarCollapsed ? 0 : 220, borderRight: sidebarCollapsed ? 'none' : '1px solid #EDEDED', backgroundColor: '#FBFBFA', overflow: 'hidden' }}>
+            <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #EDEDED', minWidth: 220 }}>
               <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'rgba(55,53,47,0.4)' }}>Pages</span>
             </div>
 
-            <div className="flex-1 overflow-y-auto py-1">
+            <div className="flex-1 overflow-y-auto py-1" style={{ minWidth: 220 }}>
               {pages.map(page => (
                 <div key={page.id}
                   onClick={() => { if (renamingPageId !== page.id) setActivePageId(page.id) }}
@@ -639,6 +640,27 @@ function WhiteboardInner() {
               </button>
             </div>
           </div>
+
+          {/* ── Sidebar toggle ── */}
+          <button
+            onClick={() => setSidebarCollapsed(c => !c)}
+            title={sidebarCollapsed ? 'Show pages' : 'Hide pages'}
+            className="absolute z-20 flex items-center justify-center rounded-r transition-colors hover:bg-[#EFEFED]"
+            style={{
+              left: sidebarCollapsed ? 0 : 220,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 14,
+              height: 40,
+              backgroundColor: '#FBFBFA',
+              border: '1px solid #EDEDED',
+              borderLeft: sidebarCollapsed ? '1px solid #EDEDED' : 'none',
+              borderRadius: sidebarCollapsed ? '0 4px 4px 0' : '0 4px 4px 0',
+              color: 'rgba(55,53,47,0.4)',
+              fontSize: 9,
+            }}>
+            {sidebarCollapsed ? '›' : '‹'}
+          </button>
 
           {/* ── Main canvas ── */}
           <div className="relative flex flex-1 overflow-hidden">

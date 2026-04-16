@@ -310,8 +310,14 @@ export default function Dashboard() {
 
           {/* Nav */}
           <div className="mb-2 space-y-0.5">
+            {/* Dashboard resets local state instead of navigating (same route) */}
+            <button
+              onClick={() => { setSelectedCourse(null); router.refresh() }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-[#EFEFED]"
+              style={{ color: NOTION.text }}>
+              <span>🏠</span>Dashboard
+            </button>
             {[
-              { href: '/dashboard',   label: 'Dashboard',  icon: '🏠' },
               { href: '/calendar',    label: 'Calendar',   icon: '📅' },
               { href: '/flashcards',  label: 'Flashcards', icon: '🃏' },
               { href: '/whiteboard',  label: 'Whiteboard', icon: '🎨' },
