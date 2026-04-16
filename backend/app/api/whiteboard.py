@@ -29,6 +29,8 @@ class StickyNote(BaseModel):
     messages: List[Dict[str, str]]
     parent_note_id: Optional[str] = None
     page_id: Optional[str] = None   # which whiteboard page this note belongs to
+    type: Optional[str] = 'ai'      # 'ai' = chat note, 'text' = plain text note
+    content: Optional[str] = None   # body text for text notes
 
 
 class PageData(BaseModel):

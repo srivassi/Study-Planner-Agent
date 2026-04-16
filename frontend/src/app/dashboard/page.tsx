@@ -99,6 +99,9 @@ export default function Dashboard() {
   const [overflowCourses, setOverflowCourses] = useState<string[]>([])
   const [mergeSuggestions, setMergeSuggestions] = useState<any[]>([])
   const [overflowStrategy, setOverflowStrategy] = useState<'merge' | 'defer' | 'keep_all'>('defer')
+  const [blockQueue, setBlockQueue] = useState<Task[]>([])
+  const [dragSrcIdx, setDragSrcIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const [showEOD, setShowEOD] = useState(false)
   const [eodChecked, setEodChecked] = useState<Set<string>>(new Set())
   const [eodNotes, setEodNotes] = useState('')
@@ -285,6 +288,26 @@ export default function Dashboard() {
   const inProgTasks = courseTasks.filter(t => t.status === 'in_progress')
   const doneTasks   = courseTasks.filter(t => t.status === 'done')
 
+  const blockQueueIds = new Set(blockQueue.map(t => t.id))
+  const availableForBlock = (selectedCourse ? courseTasks : todayTasks)
+    .filter(t => t.status !== 'done' && !blockQueueIds.has(t.id))
+
+  const launchStudyBlock = async () => {
+    if (!blockQueue.length || !userId) return
+    try {
+      const first = blockQueue[0]
+      const session = await api.startPomodoro({ task_id: first.id, user_id: userId, duration_minutes: first.estimated_minutes })
+      sessionStorage.setItem('studyBlock', JSON.stringify({
+        tasks: blockQueue.map((t, i) => ({ id: t.id, title: t.title, duration: t.estimated_minutes, sessionId: i === 0 ? session.id : null })),
+        breakMinutes: profile?.pomodoro_break_minutes || 5,
+        longBreakMinutes: profile?.long_break_minutes || 15,
+        longBreakInterval: profile?.long_break_interval || 4,
+        userId,
+      }))
+      router.push('/focus?block=true')
+    } catch (e) { console.error(e) }
+  }
+
   const filteredTodo    = todoTasks.filter(matchesFilters)
   const filteredInProg  = inProgTasks.filter(matchesFilters)
   const filteredDone    = doneTasks.filter(matchesFilters)
@@ -360,34 +383,80 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          {/* Pomodoro */}
+          {/* Study Block Builder */}
           <div className="mt-6 p-3" style={{ border: `1px solid ${NOTION.border}`, borderRadius: 4, backgroundColor: '#FFFFFF' }}>
-            <div className="mb-2 text-xs font-semibold" style={{ color: NOTION.muted }}>FOCUS SESSION</div>
-            {activeTask && <div className="mb-1 truncate text-xs font-medium" style={{ color: NOTION.text }}>{activeTask.title}</div>}
-            <div className="mb-2 text-center text-xl font-semibold tabular-nums" style={{ color: NOTION.text }}>
-              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-semibold" style={{ color: NOTION.muted }}>STUDY BLOCK</span>
+              {blockQueue.length > 0 && (
+                <button onClick={() => setBlockQueue([])} className="text-xs transition hover:opacity-70" style={{ color: NOTION.muted }}>Clear</button>
+              )}
             </div>
-            {/* Progress bar */}
-            <div className="mb-3 h-1 overflow-hidden rounded-full" style={{ backgroundColor: NOTION.hover }}>
-              <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${progress}%`, backgroundColor: NOTION.text }} />
-            </div>
-            {activeTask ? (
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <NotionBtn onClick={() => setIsRunning(!isRunning)} className="flex-1">{isRunning ? 'Pause' : 'Resume'}</NotionBtn>
-                  <NotionBtn onClick={handlePomodoroComplete}>Done ✓</NotionBtn>
-                </div>
-                <textarea placeholder="Quick note…" value={sessionNotes} onChange={e => setSessionNotes(e.target.value)} rows={2}
-                  className="w-full resize-none rounded px-2 py-1.5 text-xs text-gray-900 placeholder-gray-400"
-                  style={{ border: `1px solid ${NOTION.border}`, backgroundColor: NOTION.bg }} />
+
+            {/* Queue */}
+            {blockQueue.length > 0 ? (
+              <div className="mb-2 space-y-1">
+                {blockQueue.map((task, idx) => (
+                  <div key={task.id}
+                    draggable
+                    onDragStart={() => setDragSrcIdx(idx)}
+                    onDragOver={e => { e.preventDefault(); setDragOverIdx(idx) }}
+                    onDrop={e => {
+                      e.preventDefault()
+                      if (dragSrcIdx === null || dragSrcIdx === idx) return
+                      const next = [...blockQueue]
+                      const [moved] = next.splice(dragSrcIdx, 1)
+                      next.splice(idx, 0, moved)
+                      setBlockQueue(next)
+                      setDragSrcIdx(null); setDragOverIdx(null)
+                    }}
+                    onDragEnd={() => { setDragSrcIdx(null); setDragOverIdx(null) }}
+                    className="flex items-center gap-1.5 rounded px-2 py-1.5 text-xs cursor-grab active:cursor-grabbing"
+                    style={{
+                      backgroundColor: dragOverIdx === idx ? NOTION.hover : '#FAFAF9',
+                      border: `1px solid ${NOTION.border}`,
+                      opacity: dragSrcIdx === idx ? 0.4 : 1,
+                    }}>
+                    <span style={{ color: NOTION.muted, letterSpacing: '-1px' }}>⠿</span>
+                    <span className="flex-1 truncate" style={{ color: NOTION.text }}>{task.title}</span>
+                    <span className="shrink-0" style={{ color: NOTION.muted }}>{task.estimated_minutes}m</span>
+                    <button onClick={() => setBlockQueue(prev => prev.filter(t => t.id !== task.id))}
+                      className="shrink-0 rounded p-0.5 transition hover:bg-red-100"
+                      style={{ color: 'rgba(55,53,47,0.35)' }}>✕</button>
+                  </div>
+                ))}
               </div>
             ) : (
+              <div className="mb-2 rounded py-4 text-center text-xs" style={{ color: NOTION.muted, border: `1px dashed ${NOTION.border}` }}>
+                {availableForBlock.length > 0 ? 'Add tasks below ↓' : (selectedCourse ? 'No tasks left to add' : 'Select a module to build a block')}
+              </div>
+            )}
+
+            {/* Available tasks */}
+            {availableForBlock.length > 0 && (
+              <div className="mb-2 max-h-36 overflow-y-auto space-y-0.5">
+                {availableForBlock.map(task => (
+                  <button key={task.id}
+                    onClick={() => setBlockQueue(prev => [...prev, task])}
+                    className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-xs text-left transition hover:bg-[#EFEFED]"
+                    style={{ color: NOTION.text }}>
+                    <span style={{ color: NOTION.muted }}>+</span>
+                    <span className="flex-1 truncate">{task.title}</span>
+                    <span style={{ color: NOTION.muted }}>{task.estimated_minutes}m</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {blockQueue.length > 0 && (
               <>
-                <div className="flex gap-2">
-                  <NotionBtn onClick={() => setIsRunning(!isRunning)} className="flex-1">{isRunning ? 'Pause' : 'Start'}</NotionBtn>
-                  <NotionBtn onClick={() => { setTimeLeft(25 * 60); setIsRunning(false) }}>↺</NotionBtn>
+                <div className="mb-2 text-right text-xs" style={{ color: NOTION.muted }}>
+                  {blockQueue.length} task{blockQueue.length > 1 ? 's' : ''} · {blockQueue.reduce((s, t) => s + t.estimated_minutes, 0)}min
                 </div>
-                <div className="mt-2 text-center text-xs" style={{ color: NOTION.muted }}>Pick a task to link</div>
+                <button onClick={launchStudyBlock}
+                  className="w-full rounded py-2 text-xs font-medium text-white transition hover:opacity-90"
+                  style={{ backgroundColor: NOTION.text }}>
+                  Launch block →
+                </button>
               </>
             )}
           </div>

@@ -32,6 +32,8 @@ type StickyNote = {
   parent_note_id: string | null
   minimised?: boolean
   page_id?: string
+  type?: 'ai' | 'text'   // 'ai' = chat note (default), 'text' = plain text note
+  content?: string        // body for text notes
 }
 
 type Page = {
@@ -76,18 +78,20 @@ function renderMarkdown(text: string): React.ReactNode {
   })
 }
 
-function newNote(x: number, y: number, pageId: string, highlight?: string): StickyNote {
+function newNote(x: number, y: number, pageId: string, highlight?: string, type: 'ai' | 'text' = 'ai'): StickyNote {
   return {
     id: crypto.randomUUID(),
     x, y,
     width: 300,
     highlight_text: highlight || null,
     page_number: null,
-    color: NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
-    title: highlight ? `"${highlight.slice(0, 40)}${highlight.length > 40 ? '…' : ''}"` : 'Note',
+    color: type === 'text' ? '#FFFFFF' : NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)],
+    title: highlight ? `"${highlight.slice(0, 40)}${highlight.length > 40 ? '…' : ''}"` : '',
     messages: [],
     parent_note_id: null,
     page_id: pageId,
+    type,
+    content: type === 'text' ? '' : undefined,
   }
 }
 
@@ -154,6 +158,9 @@ function WhiteboardInner() {
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [noteMode, setNoteMode] = useState<'ai' | 'text'>('ai')
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
+  const [titleDraft, setTitleDraft] = useState('')
 
   const activePage = useMemo(() => pages.find(p => p.id === activePageId) || null, [pages, activePageId])
 
@@ -364,7 +371,7 @@ function WhiteboardInner() {
   const handleCanvasDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!selectedCourse || !activePageId) return
     const rect = canvasRef.current!.getBoundingClientRect()
-    const note = newNote(e.clientX - rect.left, e.clientY - rect.top, activePageId, selection || undefined)
+    const note = newNote(e.clientX - rect.left, e.clientY - rect.top, activePageId, selection || undefined, noteMode)
     const updated = [...notes, note]
     updateNotes(updated)
     setActiveNote(note.id)
@@ -507,6 +514,29 @@ function WhiteboardInner() {
         <div className="flex items-center gap-2">
           {selectedCourse && activePageId && (
             <>
+              {/* Note mode toggle */}
+              <div className="flex rounded overflow-hidden" style={{ border: '1px solid #EDEDED' }}>
+                <button
+                  onClick={() => setNoteMode('ai')}
+                  className="px-2.5 py-1 text-xs transition"
+                  style={{
+                    backgroundColor: noteMode === 'ai' ? '#37352F' : '#FFFFFF',
+                    color: noteMode === 'ai' ? '#FFFFFF' : 'rgba(55,53,47,0.65)',
+                  }}>
+                  ✨ AI
+                </button>
+                <button
+                  onClick={() => setNoteMode('text')}
+                  className="px-2.5 py-1 text-xs transition"
+                  style={{
+                    backgroundColor: noteMode === 'text' ? '#37352F' : '#FFFFFF',
+                    color: noteMode === 'text' ? '#FFFFFF' : 'rgba(55,53,47,0.65)',
+                    borderLeft: '1px solid #EDEDED',
+                  }}>
+                  ✎ Text
+                </button>
+              </div>
+
               <button onClick={() => fileInputRef.current?.click()}
                 className="rounded px-3 py-1.5 text-xs transition"
                 style={{ border: '1px solid #EDEDED', color: '#37352F', backgroundColor: '#FFFFFF' }}
@@ -699,7 +729,7 @@ function WhiteboardInner() {
                       onDoubleClick={(e, page) => {
                         if (!canvasRef.current || !activePageId) return
                         const rect = canvasRef.current.getBoundingClientRect()
-                        const note = newNote(e.clientX - rect.left, e.clientY - rect.top, activePageId, selection || undefined)
+                        const note = newNote(e.clientX - rect.left, e.clientY - rect.top, activePageId, selection || undefined, noteMode)
                         note.page_number = page
                         const updated = [...notes, note]
                         updateNotes(updated)
@@ -733,22 +763,63 @@ function WhiteboardInner() {
                     style={{ left: note.x, top: note.y, width: note.width, zIndex: activeNote === note.id ? 100 : 10 }}
                     onClick={() => setActiveNote(note.id)}
                   >
+                    {/* Note header */}
                     <div
-                      onMouseDown={e => startDrag(e, note.id)}
+                      onMouseDown={e => { if (editingTitleId !== note.id) startDrag(e, note.id) }}
                       className="flex cursor-grab items-center justify-between rounded-t-xl px-3 py-2 text-xs font-semibold active:cursor-grabbing"
                       style={{ backgroundColor: note.color, color: '#37352F', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
                     >
-                      <span className="truncate max-w-45">{note.title}</span>
+                      {/* Inline title editing */}
+                      {editingTitleId === note.id ? (
+                        <input
+                          autoFocus
+                          value={titleDraft}
+                          onChange={e => setTitleDraft(e.target.value)}
+                          onBlur={() => {
+                            const updated = notes.map(n => n.id === note.id ? { ...n, title: titleDraft } : n)
+                            updateNotes(updated)
+                            setEditingTitleId(null)
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              const updated = notes.map(n => n.id === note.id ? { ...n, title: titleDraft } : n)
+                              updateNotes(updated)
+                              setEditingTitleId(null)
+                            }
+                            if (e.key === 'Escape') setEditingTitleId(null)
+                          }}
+                          onClick={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                          className="flex-1 min-w-0 rounded px-1 py-0 text-xs focus:outline-none cursor-text"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.6)', border: '1px solid rgba(55,53,47,0.2)', color: '#37352F' }}
+                        />
+                      ) : (
+                        <span
+                          className="truncate flex-1 min-w-0 cursor-text"
+                          style={{ color: note.title ? '#37352F' : 'rgba(55,53,47,0.4)' }}
+                          onDoubleClick={e => {
+                            e.stopPropagation()
+                            setEditingTitleId(note.id)
+                            setTitleDraft(note.title || '')
+                          }}
+                          title="Double-click to rename"
+                        >
+                          {note.title || (note.type === 'text' ? 'Untitled note' : 'Note')}
+                        </span>
+                      )}
+
                       <div className="flex items-center gap-1 ml-2 shrink-0">
                         {note.parent_note_id && <span className="text-xs" style={{ color: 'rgba(55,53,47,0.5)' }}>⤷ fork</span>}
                         <button onClick={e => { e.stopPropagation(); toggleMinimise(note.id) }}
                           className="rounded p-0.5 transition hover:bg-black/10" style={{ color: 'rgba(55,53,47,0.6)' }}>
                           {note.minimised ? '▼' : '▲'}
                         </button>
-                        <button onClick={e => { e.stopPropagation(); forkNote(note.id) }}
-                          className="rounded p-0.5 transition hover:bg-black/10" style={{ color: 'rgba(55,53,47,0.6)' }} title="Fork into new thread">
-                          ⑂
-                        </button>
+                        {note.type !== 'text' && (
+                          <button onClick={e => { e.stopPropagation(); forkNote(note.id) }}
+                            className="rounded p-0.5 transition hover:bg-black/10" style={{ color: 'rgba(55,53,47,0.6)' }} title="Fork into new thread">
+                            ⑂
+                          </button>
+                        )}
                         <button onClick={e => { e.stopPropagation(); deleteNote(note.id) }}
                           className="rounded p-0.5 transition hover:bg-black/10" style={{ color: 'rgba(55,53,47,0.6)' }}>
                           ✕
@@ -757,61 +828,82 @@ function WhiteboardInner() {
                     </div>
 
                     {!note.minimised && (
-                      <div className="rounded-b-xl border border-t-0"
-                        style={{ backgroundColor: note.color + 'dd', borderColor: note.color, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-
-                        {note.highlight_text && (
-                          <div className="mx-3 mt-2 rounded px-2 py-1.5 text-xs italic"
-                            style={{ borderLeft: '2px solid rgba(55,53,47,0.2)', backgroundColor: 'rgba(255,255,255,0.4)', color: 'rgba(55,53,47,0.7)' }}>
-                            "{note.highlight_text.slice(0, 120)}{note.highlight_text.length > 120 ? '…' : ''}"
-                          </div>
-                        )}
-
-                        <div className="max-h-60 overflow-y-auto p-3 space-y-2">
-                          {note.messages.length === 0 && (
-                            <div className="text-xs italic text-center py-2" style={{ color: 'rgba(55,53,47,0.5)' }}>
-                              Ask Claude anything about this{note.highlight_text ? ' excerpt' : ' topic'}…
-                            </div>
-                          )}
-                          {note.messages.map((m, i) => (
-                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                              <div className="max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed"
-                                style={m.role === 'user'
-                                  ? { backgroundColor: '#37352F', color: '#FFFFFF' }
-                                  : { backgroundColor: 'rgba(255,255,255,0.8)', color: '#37352F', border: '1px solid rgba(55,53,47,0.1)' }}>
-                                {m.role === 'assistant' ? renderMarkdown(m.content) : m.content}
-                              </div>
-                            </div>
-                          ))}
-                          {loadingChat[note.id] && (
-                            <div className="flex justify-start">
-                              <div className="rounded-lg px-3 py-2 text-xs animate-pulse"
-                                style={{ backgroundColor: 'rgba(255,255,255,0.8)', color: 'rgba(55,53,47,0.5)', border: '1px solid rgba(55,53,47,0.1)' }}>
-                                Thinking…
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex gap-1.5 p-2" style={{ borderTop: '1px solid rgba(55,53,47,0.1)' }}>
-                          <input
-                            type="text"
-                            value={chatInput[note.id] || ''}
-                            onChange={e => setChatInput(prev => ({ ...prev, [note.id]: e.target.value }))}
-                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(note.id) } }}
-                            placeholder="Ask Claude…"
-                            className="flex-1 rounded px-2.5 py-1.5 text-xs focus:outline-none"
-                            style={{ backgroundColor: 'rgba(255,255,255,0.7)', border: '1px solid rgba(55,53,47,0.15)', color: '#37352F' }}
+                      note.type === 'text' ? (
+                        /* ── Text note body ── */
+                        <div className="rounded-b-xl border border-t-0"
+                          style={{ backgroundColor: '#FFFFFF', borderColor: '#EDEDED', boxShadow: '0 4px 12px rgba(0,0,0,0.06)' }}>
+                          <textarea
+                            value={note.content || ''}
+                            onChange={e => {
+                              const updated = notes.map(n => n.id === note.id ? { ...n, content: e.target.value } : n)
+                              updateNotes(updated)
+                            }}
+                            placeholder="Start writing…"
                             onClick={e => e.stopPropagation()}
+                            onMouseDown={e => e.stopPropagation()}
+                            className="w-full resize-none rounded-b-xl px-3 py-2.5 text-xs focus:outline-none"
+                            rows={6}
+                            style={{ backgroundColor: 'transparent', color: '#37352F', lineHeight: 1.6 }}
                           />
-                          <button onClick={e => { e.stopPropagation(); sendChat(note.id) }}
-                            disabled={!chatInput[note.id]?.trim() || loadingChat[note.id]}
-                            className="rounded px-2.5 py-1.5 text-xs transition disabled:opacity-40"
-                            style={{ backgroundColor: '#37352F', color: '#FFFFFF' }}>
-                            →
-                          </button>
                         </div>
-                      </div>
+                      ) : (
+                        /* ── AI chat note body ── */
+                        <div className="rounded-b-xl border border-t-0"
+                          style={{ backgroundColor: note.color + 'dd', borderColor: note.color, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+
+                          {note.highlight_text && (
+                            <div className="mx-3 mt-2 rounded px-2 py-1.5 text-xs italic"
+                              style={{ borderLeft: '2px solid rgba(55,53,47,0.2)', backgroundColor: 'rgba(255,255,255,0.4)', color: 'rgba(55,53,47,0.7)' }}>
+                              "{note.highlight_text.slice(0, 120)}{note.highlight_text.length > 120 ? '…' : ''}"
+                            </div>
+                          )}
+
+                          <div className="max-h-60 overflow-y-auto p-3 space-y-2">
+                            {note.messages.length === 0 && (
+                              <div className="text-xs italic text-center py-2" style={{ color: 'rgba(55,53,47,0.5)' }}>
+                                Ask Claude anything about this{note.highlight_text ? ' excerpt' : ' topic'}…
+                              </div>
+                            )}
+                            {note.messages.map((m, i) => (
+                              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <div className="max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed"
+                                  style={m.role === 'user'
+                                    ? { backgroundColor: '#37352F', color: '#FFFFFF' }
+                                    : { backgroundColor: 'rgba(255,255,255,0.8)', color: '#37352F', border: '1px solid rgba(55,53,47,0.1)' }}>
+                                  {m.role === 'assistant' ? renderMarkdown(m.content) : m.content}
+                                </div>
+                              </div>
+                            ))}
+                            {loadingChat[note.id] && (
+                              <div className="flex justify-start">
+                                <div className="rounded-lg px-3 py-2 text-xs animate-pulse"
+                                  style={{ backgroundColor: 'rgba(255,255,255,0.8)', color: 'rgba(55,53,47,0.5)', border: '1px solid rgba(55,53,47,0.1)' }}>
+                                  Thinking…
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex gap-1.5 p-2" style={{ borderTop: '1px solid rgba(55,53,47,0.1)' }}>
+                            <input
+                              type="text"
+                              value={chatInput[note.id] || ''}
+                              onChange={e => setChatInput(prev => ({ ...prev, [note.id]: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(note.id) } }}
+                              placeholder="Ask Claude…"
+                              className="flex-1 rounded px-2.5 py-1.5 text-xs focus:outline-none"
+                              style={{ backgroundColor: 'rgba(255,255,255,0.7)', border: '1px solid rgba(55,53,47,0.15)', color: '#37352F' }}
+                              onClick={e => e.stopPropagation()}
+                            />
+                            <button onClick={e => { e.stopPropagation(); sendChat(note.id) }}
+                              disabled={!chatInput[note.id]?.trim() || loadingChat[note.id]}
+                              className="rounded px-2.5 py-1.5 text-xs transition disabled:opacity-40"
+                              style={{ backgroundColor: '#37352F', color: '#FFFFFF' }}>
+                              →
+                            </button>
+                          </div>
+                        </div>
+                      )
                     )}
                   </div>
                 ))}
@@ -820,7 +912,7 @@ function WhiteboardInner() {
                   <button
                     onClick={() => {
                       if (!activePageId) return
-                      const note = newNote(40, 40, activePageId)
+                      const note = newNote(40, 40, activePageId, undefined, noteMode)
                       const updated = [...notes, note]
                       updateNotes(updated)
                       setActiveNote(note.id)
