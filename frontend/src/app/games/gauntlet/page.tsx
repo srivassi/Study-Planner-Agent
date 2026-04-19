@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { api } from '../../../lib/api'
@@ -17,6 +17,57 @@ type Topic = { id: string; title: string; summary: string; key_points?: string[]
 type Message = { role: 'user' | 'assistant'; content: string }
 type TopicState = { topic: Topic; messages: Message[]; stars: number | null }
 type Phase = 'loading' | 'active' | 'finished'
+
+function renderMsg(text: string) {
+  const lines = text.split('\n')
+  const nodes: React.ReactNode[] = []
+  let listItems: string[] = []
+
+  const flushList = (key: string) => {
+    if (!listItems.length) return
+    nodes.push(
+      <ul key={key} style={{ paddingLeft: 16, margin: '4px 0', listStyle: 'none' }}>
+        {listItems.map((li, i) => (
+          <li key={i} style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+            <span style={{ opacity: 0.5, flexShrink: 0 }}>•</span>
+            <span>{inlineStyle(li)}</span>
+          </li>
+        ))}
+      </ul>
+    )
+    listItems = []
+  }
+
+  lines.forEach((line, li) => {
+    const isBullet = /^\s*[-•*]\s/.test(line)
+    if (isBullet) {
+      listItems.push(line.replace(/^\s*[-•*]\s/, ''))
+      return
+    }
+    flushList(`list-${li}`)
+    if (line.trim() === '') {
+      nodes.push(<div key={`br-${li}`} style={{ height: 6 }} />)
+    } else {
+      nodes.push(<div key={`l-${li}`}>{inlineStyle(line)}</div>)
+    }
+  })
+  flushList('list-end')
+  return <>{nodes}</>
+}
+
+function inlineStyle(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = []
+  const re = /(\*\*(.+?)\*\*|`(.+?)`)/g
+  let last = 0; let key = 0; let m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(<span key={key++}>{text.slice(last, m.index)}</span>)
+    if (m[0].startsWith('**')) parts.push(<strong key={key++}>{m[2]}</strong>)
+    else parts.push(<code key={key++} style={{ background: 'rgba(55,53,47,0.08)', borderRadius: 3, padding: '1px 4px', fontFamily: 'monospace', fontSize: '0.88em' }}>{m[3]}</code>)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(<span key={key++}>{text.slice(last)}</span>)
+  return <>{parts}</>
+}
 
 const STAR_META: Record<number, { label: string; color: string; bg: string }> = {
   1: { label: 'Getting there',  color: '#DC2626', bg: '#FEF2F2' },
@@ -275,7 +326,7 @@ export default function GauntletPage() {
               style={m.role === 'user'
                 ? { backgroundColor: N.indigo, color: '#fff', borderBottomRightRadius: 4 }
                 : { backgroundColor: N.bg, color: N.text, borderBottomLeftRadius: 4, border: `1px solid ${N.border}` }}>
-              {m.content}
+              {m.role === 'assistant' ? renderMsg(m.content) : m.content}
             </div>
           </div>
         ))}
