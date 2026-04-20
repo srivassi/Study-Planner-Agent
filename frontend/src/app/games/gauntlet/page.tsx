@@ -112,7 +112,8 @@ export default function GauntletPage() {
     const { pdfUrl, pdfName: name, roomId: rid } = JSON.parse(raw)
     setPdfName(name || 'PDF')
     if (rid) setRoomId(rid)
-    setTimeout(() => setLoadingMsg('Extracting topics with Claude…'), 1400)
+    setLoadingMsg(rid ? 'Loading session…' : 'Reading your PDF…')
+    if (!rid) setTimeout(() => setLoadingMsg('Extracting topics with Claude…'), 1400)
     api.gauntletStart(pdfUrl, rid)
       .then(({ topics, pdf_text }: { topics: Topic[]; pdf_text: string }) => {
         setPdfText(pdf_text)
