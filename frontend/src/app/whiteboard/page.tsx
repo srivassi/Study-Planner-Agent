@@ -152,6 +152,9 @@ function WhiteboardInner() {
   const [flashcardGenStatus, setFlashcardGenStatus] = useState<null | 'generating' | 'done' | 'error'>(null)
   const [selection, setSelection] = useState<string>('')
 
+  const [pastPapers, setPastPapers] = useState<{ id: string; title: string; pdf_url: string | null; pdf_name: string | null; source_label: string | null }[]>([])
+  const [pastPapersOpen, setPastPapersOpen] = useState(true)
+
   const [numPages, setNumPages] = useState<number>(0)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; text: string; page: number } | null>(null)
@@ -179,7 +182,7 @@ function WhiteboardInner() {
       setUserId(uid)
       const c = await api.getCourses(uid).catch(() => [])
       setCourses(c)
-      if (selectedCourse) loadWhiteboard(uid, selectedCourse)
+      if (selectedCourse) { loadWhiteboard(uid, selectedCourse); loadPastPapers(uid, selectedCourse) }
     })
   }, [router])
 
@@ -241,6 +244,15 @@ function WhiteboardInner() {
     }
   }
 
+  const loadPastPapers = async (uid: string, courseId: string) => {
+    try {
+      const banks = await api.getQuestionBanks(uid, courseId)
+      setPastPapers((banks || []).filter((b: any) => b.source_type === 'past_paper' && b.pdf_url))
+    } catch {
+      setPastPapers([])
+    }
+  }
+
   const switchCourse = async (courseId: string) => {
     setSelectedCourse(courseId)
     setPages([])
@@ -248,7 +260,10 @@ function WhiteboardInner() {
     setPdfError(null)
     setFlashcardGenStatus(null)
     setNotes([])
-    if (userId) loadWhiteboard(userId, courseId)
+    if (userId) {
+      loadWhiteboard(userId, courseId)
+      loadPastPapers(userId, courseId)
+    }
   }
 
   // ── Auto-save ─────────────────────────────────────────────
@@ -713,6 +728,38 @@ function WhiteboardInner() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Past Papers */}
+            {pastPapers.length > 0 && (
+              <div style={{ borderTop: '1px solid #EDEDED' }}>
+                <button
+                  onClick={() => setPastPapersOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-4 py-2 transition hover:bg-[#EFEFED]"
+                  style={{ minWidth: 220 }}>
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'rgba(55,53,47,0.4)' }}>
+                    Past Papers ({pastPapers.length})
+                  </span>
+                  <span className="text-xs" style={{ color: 'rgba(55,53,47,0.35)' }}>{pastPapersOpen ? '▲' : '▼'}</span>
+                </button>
+                {pastPapersOpen && (
+                  <div className="overflow-y-auto" style={{ maxHeight: 200, minWidth: 220 }}>
+                    {pastPapers.map(p => (
+                      <a
+                        key={p.id}
+                        href={p.pdf_url!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-1.5 text-xs truncate transition-colors hover:bg-[#EFEFED]"
+                        style={{ color: 'rgba(55,53,47,0.7)', display: 'flex' }}
+                        title={p.title}>
+                        <span>📄</span>
+                        <span className="truncate flex-1">{p.title}{p.source_label ? ` (${p.source_label})` : ''}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

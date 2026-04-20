@@ -324,9 +324,10 @@ export default function Dashboard() {
             </button>
             {[
               { href: '/calendar',    label: 'Calendar',   icon: '📅' },
-              { href: '/flashcards',  label: 'Flashcards', icon: '🃏' },
-              { href: '/games',       label: 'Games',      icon: '🎮' },
-              { href: '/whiteboard',  label: 'Whiteboard', icon: '🎨' },
+              { href: '/flashcards',  label: 'Flashcards',    icon: '🃏' },
+              { href: '/questions',   label: 'Question Bank', icon: '📝' },
+              { href: '/games',       label: 'Games',         icon: '🎮' },
+              { href: '/whiteboard',  label: 'Whiteboard',    icon: '🎨' },
               { href: '/settings',    label: 'Settings',   icon: '⚙️' },
             ].map(item => (
               <Link key={item.href} href={item.href}

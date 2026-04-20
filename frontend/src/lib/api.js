@@ -66,8 +66,16 @@ export const api = {
   forkNote: (data) => req('/whiteboard/fork', { method: 'POST', body: JSON.stringify(data) }),
   extractSections: (pdfUrl) => req('/whiteboard/extract-sections', { method: 'POST', body: JSON.stringify({ pdf_url: pdfUrl }) }),
 
+  // ── Question Bank ─────────────────────────────────────────────
+  getQuestionTopics: (userId, courseId) => req(`/questions/topics?user_id=${userId}&course_id=${courseId}`),
+  getQuestionBanks: (userId, courseId) => req(`/questions/banks?user_id=${userId}&course_id=${courseId}`),
+  getQuestionBank: (bankId) => req(`/questions/banks/${bankId}`),
+  deleteQuestionBank: (bankId) => req(`/questions/banks/${bankId}`, { method: 'DELETE' }),
+  generateQuestionBank: (data) => req('/questions/generate', { method: 'POST', body: JSON.stringify(data) }),
+  gradeAnswer: (data) => req('/questions/grade', { method: 'POST', body: JSON.stringify(data) }),
+
   // ── Gauntlet ──────────────────────────────────────────────────
-  gauntletStart: (pdfUrl) => req('/tutor/start', { method: 'POST', body: JSON.stringify({ pdf_url: pdfUrl }) }),
+  gauntletStart: (pdfUrl, roomId) => req('/tutor/start', { method: 'POST', body: JSON.stringify({ pdf_url: pdfUrl, room_id: roomId || null }) }),
   gauntletChat: (data) => req('/tutor/chat', { method: 'POST', body: JSON.stringify(data) }),
   gauntletGetRooms: (userId, courseId) => req(`/tutor/rooms?user_id=${userId}${courseId ? `&course_id=${courseId}` : ''}`),
   gauntletUpsertRoom: (data) => req('/tutor/rooms', { method: 'POST', body: JSON.stringify(data) }),

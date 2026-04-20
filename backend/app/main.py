@@ -7,6 +7,7 @@ from app.api.onboarding import router as onboarding_router
 from app.api.whiteboard import router as whiteboard_router
 from app.api.flashcards import router as flashcards_router
 from app.api.tutor import router as tutor_router
+from app.api.questions import router as questions_router
 import os
 
 app = FastAPI(title="Study Planner Agent")
@@ -29,6 +30,7 @@ app.include_router(study_router)
 app.include_router(whiteboard_router)
 app.include_router(flashcards_router)
 app.include_router(tutor_router)
+app.include_router(questions_router)
 
 
 @app.get("/health")

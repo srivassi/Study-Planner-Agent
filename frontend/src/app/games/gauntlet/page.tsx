@@ -113,7 +113,7 @@ export default function GauntletPage() {
     setPdfName(name || 'PDF')
     if (rid) setRoomId(rid)
     setTimeout(() => setLoadingMsg('Extracting topics with Claude…'), 1400)
-    api.gauntletStart(pdfUrl)
+    api.gauntletStart(pdfUrl, rid)
       .then(({ topics, pdf_text }: { topics: Topic[]; pdf_text: string }) => {
         setPdfText(pdf_text)
         const states: TopicState[] = topics.map(t => ({ topic: t, messages: [], stars: null }))
