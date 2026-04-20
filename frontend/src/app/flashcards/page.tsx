@@ -347,7 +347,7 @@ function FlashcardsInner() {
                       }}
                       className="rounded px-2 py-1 text-xs transition-colors opacity-0 group-hover:opacity-100 md:block"
                       style={{ border: `1px solid ${NOTION.btnBorder}`, color: '#6366F1', backgroundColor: NOTION.btn }}>
-                      ⚔️ Gauntlet
+                      🔥 Goblet of Fire
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); router.push(`/flashcards/${set.id}/jeopardy`) }}

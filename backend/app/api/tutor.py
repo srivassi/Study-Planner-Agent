@@ -80,34 +80,40 @@ def _has_enough_text(pdf_text: str, min_chars: int = 300) -> bool:
 
 
 def _extract_json(raw: str) -> dict:
-    # Remove opening and closing code fences
     cleaned = re.sub(r'```(?:json)?\s*|\s*```', '', raw).strip()
-    try:
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, dict):
-            return parsed
-        if isinstance(parsed, list):
-            return {"topics": parsed}
-    except json.JSONDecodeError:
-        pass
-    # Fallback: find the outermost {...}
-    m = re.search(r'\{[\s\S]*\}', cleaned)
-    if m:
+
+    def _try_parse(s: str):
         try:
-            parsed = json.loads(m.group(0))
+            parsed = json.loads(s)
             if isinstance(parsed, dict):
                 return parsed
-        except json.JSONDecodeError:
-            pass
-    # Fallback: find a top-level [...] array
-    m2 = re.search(r'\[[\s\S]*\]', cleaned)
-    if m2:
-        try:
-            parsed = json.loads(m2.group(0))
             if isinstance(parsed, list):
                 return {"topics": parsed}
-        except json.JSONDecodeError:
+        except Exception:
             pass
+        return None
+
+    # Direct parse
+    result = _try_parse(cleaned)
+    if result:
+        return result
+
+    # Outermost { ... }
+    start = cleaned.find('{')
+    end = cleaned.rfind('}')
+    if start != -1 and end > start:
+        result = _try_parse(cleaned[start:end + 1])
+        if result:
+            return result
+
+    # Outermost [ ... ]
+    start = cleaned.find('[')
+    end = cleaned.rfind(']')
+    if start != -1 and end > start:
+        result = _try_parse(cleaned[start:end + 1])
+        if result:
+            return result
+
     return {}
 
 

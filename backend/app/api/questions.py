@@ -130,8 +130,8 @@ def extract_from_past_paper(
     prompt = f"""You are processing an exam past paper. Extract every question from this paper exactly as written — preserve the original wording faithfully. Do not paraphrase.
 
 For each question:
-- Assign a topic based on the content (derive from the paper itself)
-- If a question has sub-parts (a, b, c), extract each sub-part as a separate question, prefixing it with the parent question context
+- Assign a topic based on the broad subject area (e.g. "Search Algorithms", "Markov Decision Processes", "Neural Networks"). Each general concept in the paper gets one topic label — do NOT create a separate topic per question or sub-part. Multiple questions must share the same topic label where they cover the same concept.
+- If a question has sub-parts (a, b, c), extract each sub-part as a separate question. Prefix it with enough parent context to make it self-contained — include the full parent question stem and any earlier sub-parts that this one references or builds on (e.g. "Given the Prolog KB defined above... (c) Using your answer from (b), explain...")
 - Write a concise but complete model answer (2-5 sentences is fine)
 - Add a one-sentence explanation of the key concept being tested
 
@@ -221,7 +221,7 @@ def generate_question_bank(body: GenerateRequest):
 Generate a comprehensive set of exam questions that cover all major topics in this material. Questions should:
 - Be at exam difficulty level (not trivial recall)
 - Mix question types: definition, explain/discuss, apply/analyse, compare/contrast
-- Group naturally by topic
+- Be grouped under broad topic labels — each general concept gets one topic, and many questions should share the same topic label. Do NOT create a new topic per question.
 
 For each question provide a model answer and explanation of what's being tested.
 

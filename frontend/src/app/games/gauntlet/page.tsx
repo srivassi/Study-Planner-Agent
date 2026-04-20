@@ -122,7 +122,7 @@ export default function GauntletPage() {
         return sendTurn('', states, 0, pdf_text, topics)
       })
       .catch((e: any) => {
-        alert(e.message || 'Failed to start Gauntlet.')
+        alert(e.message || 'Failed to start Goblet of Fire.')
         router.replace('/games')
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,12 +233,12 @@ const handleContinue = () => {
       <div className="min-h-screen" style={{ fontFamily: 'Inter, sans-serif', backgroundColor: N.sidebar, color: N.text }}>
         <div className="sticky top-0 z-10 flex items-center gap-4 px-6 py-3" style={{ borderBottom: `1px solid ${N.border}`, backgroundColor: N.sidebar }}>
           <Link href="/games" className="text-sm" style={{ color: N.muted }}>← Games</Link>
-          <span className="text-sm font-semibold">⚔️ Gauntlet — Results</span>
+          <span className="text-sm font-semibold">🔥 Goblet of Fire — Results</span>
         </div>
         <div className="mx-auto max-w-lg px-6 py-12">
           <div className="mb-8 text-center">
             <div className="mb-2 text-5xl">🎉</div>
-            <h1 className="mb-1 text-2xl font-bold" style={{ color: N.text }}>Gauntlet Complete!</h1>
+            <h1 className="mb-1 text-2xl font-bold" style={{ color: N.text }}>Goblet of Fire Complete!</h1>
             <p className="text-sm" style={{ color: N.muted }}>{pdfName}</p>
           </div>
 
@@ -305,7 +305,7 @@ const handleContinue = () => {
           ← Games
         </Link>
         <div className="min-w-0 flex-1 text-center">
-          <div className="text-sm font-semibold" style={{ color: N.text }}>⚔️ Gauntlet</div>
+          <div className="text-sm font-semibold" style={{ color: N.text }}>🔥 Goblet of Fire</div>
           <div className="truncate text-xs" style={{ color: N.muted }}>{pdfName}</div>
         </div>
         <div className="shrink-0 flex items-center gap-3">

@@ -32,8 +32,8 @@ function timeAgo(dateStr: string | null) {
 const GAMES = [
   {
     id: 'gauntlet',
-    icon: '⚔️',
-    title: 'Gauntlet',
+    icon: '🔥',
+    title: 'Goblet of Fire',
     tagline: 'Master any PDF through Socratic Q&A',
     desc: 'Claude reads your lecture PDF, breaks it into topics, then teaches you through a back-and-forth discussion. Earn stars per topic and get a mastery report at the end.',
     color: '#6366F1',
@@ -173,7 +173,7 @@ export default function GamesPage() {
         {showGauntletPicker && (
           <div className="mt-8 rounded-xl border bg-white p-6" style={{ borderColor: NOTION.border }}>
             <div className="mb-4 flex items-center justify-between">
-              <span className="font-semibold">⚔️ Gauntlet Rooms</span>
+              <span className="font-semibold">🔥 Goblet of Fire</span>
               <button onClick={() => { setShowGauntletPicker(false); setGauntletCourse(''); setRooms([]); setShowNewPdf(false) }}
                 className="text-sm" style={{ color: NOTION.muted }}>✕</button>
             </div>
