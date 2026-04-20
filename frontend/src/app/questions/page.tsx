@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '../../lib/supabase'
 import { api } from '../../lib/api'
+import { renderNote } from '../../lib/noteRenderer'
 
 const N = {
   bg: '#FFFFFF', sidebar: '#FBFBFA', border: '#EDEDED',
@@ -53,7 +54,7 @@ function QuestionCard({ q }: { q: Question }) {
   return (
     <div className="rounded-xl border p-5 space-y-3" style={{ borderColor: N.border, backgroundColor: N.bg }}>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm leading-relaxed flex-1" style={{ color: N.text }}>{q.question_text}</p>
+        <div className="text-sm leading-relaxed flex-1" style={{ color: N.text }}>{renderNote(q.question_text)}</div>
         {q.source_label && (
           <span className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
             style={{ backgroundColor: N.indigoBg, color: N.indigo }}>{q.source_label}</span>
@@ -97,7 +98,7 @@ function QuestionCard({ q }: { q: Question }) {
       {revealed && (
         <div className="rounded-lg border p-4 space-y-2" style={{ borderColor: N.border, backgroundColor: N.sidebar }}>
           <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: N.muted }}>Model Answer</div>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: N.text }}>{q.model_answer}</p>
+          <div className="text-sm leading-relaxed" style={{ color: N.text }}>{renderNote(q.model_answer)}</div>
           {q.explanation && (
             <>
               <div className="text-xs font-semibold uppercase tracking-wide mt-2" style={{ color: N.muted }}>What this tests</div>

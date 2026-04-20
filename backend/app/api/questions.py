@@ -55,22 +55,40 @@ def _fetch_url_pdf_text(pdf_url: str) -> str:
 
 def _parse_questions(raw: str) -> list:
     cleaned = re.sub(r'```(?:json)?\s*|\s*```', '', raw).strip()
-    # direct parse
-    try:
-        result = json.loads(cleaned)
-        if isinstance(result, list):
-            return result
-        if isinstance(result, dict) and "questions" in result:
-            return result["questions"]
-    except Exception:
-        pass
-    # find array
-    m = re.search(r'\[[\s\S]*\]', cleaned)
-    if m:
+
+    def _try(s: str):
         try:
-            return json.loads(m.group(0))
+            result = json.loads(s)
+            if isinstance(result, list):
+                return result
+            if isinstance(result, dict) and "questions" in result:
+                return result["questions"]
         except Exception:
             pass
+        return None
+
+    # direct parse
+    result = _try(cleaned)
+    if result is not None:
+        return result
+
+    # find outermost array
+    start = cleaned.find('[')
+    end = cleaned.rfind(']')
+    if start != -1 and end != -1 and end > start:
+        result = _try(cleaned[start:end + 1])
+        if result is not None:
+            return result
+
+    # truncated response — try closing the last incomplete object
+    if start != -1:
+        fragment = cleaned[start:]
+        last_brace = fragment.rfind('}')
+        if last_brace != -1:
+            result = _try(fragment[:last_brace + 1] + ']')
+            if result is not None:
+                return result
+
     return []
 
 
@@ -112,31 +130,37 @@ def extract_from_past_paper(
     prompt = f"""You are processing an exam past paper. Extract every question from this paper exactly as written — preserve the original wording faithfully. Do not paraphrase.
 
 For each question:
-- Assign a topic (e.g. "SQL", "ER Modelling", "Transactions & Concurrency", "Normalisation") based on the content
-- If a question has sub-parts (a, b, c), extract each sub-part as a separate question but keep the parent context in the question text
-- Generate a thorough model answer (as a professor would write it)
-- Add a brief explanation of the key concepts being tested
+- Assign a topic based on the content (derive from the paper itself)
+- If a question has sub-parts (a, b, c), extract each sub-part as a separate question, prefixing it with the parent question context
+- Write a concise but complete model answer (2-5 sentences is fine)
+- Add a one-sentence explanation of the key concept being tested
 
-Return ONLY a JSON array, no other text:
+CRITICAL JSON RULES — you must follow these exactly:
+- Return ONLY a valid JSON array, absolutely no text before or after
+- Every string value must be on one line — no literal newlines inside strings, use \\n instead
+- Escape all backslashes as \\\\ and all double quotes inside strings as \\"
+- If question text contains code, keep it inline using \\n for line breaks
+- Do not use triple backticks or markdown anywhere in your response
+
 [
   {{
     "topic": "Topic name",
-    "question_text": "Exact question text from the paper",
-    "model_answer": "Detailed model answer",
-    "explanation": "Key concepts this question tests"
+    "question_text": "Exact question text (use \\n for line breaks in code)",
+    "model_answer": "Concise model answer",
+    "explanation": "Key concept tested"
   }}
 ]
 
-Source label (year/paper identifier): "{source_label or title}"
+Source: "{source_label or title}"
 
-Exam paper content:
-{pdf_text[:80000]}"""
+Exam paper:
+{pdf_text[:60000]}"""
 
-    raw = _call_claude(prompt)
+    raw = _call_claude(prompt, max_tokens=8192)
     questions = _parse_questions(raw)
 
     if not questions:
-        raise HTTPException(status_code=500, detail="Could not extract questions from this PDF")
+        raise HTTPException(status_code=500, detail=f"Could not parse questions. Claude raw (first 500): {raw[:500]!r}")
 
     supabase = get_supabase_client()
 
