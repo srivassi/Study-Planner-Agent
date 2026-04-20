@@ -127,11 +127,10 @@ export default function QuestionsPage() {
   const [loadingBanks, setLoadingBanks] = useState(false)
 
   // Upload form
-  const [showExtract, setShowExtract]   = useState(false)
-  const [extractFiles, setExtractFiles] = useState<File[]>([])
-  const [extractTitle, setExtractTitle] = useState('')
-  const [extractYear, setExtractYear]   = useState('')
-  const [extracting, setExtracting]     = useState(false)
+  type PaperSlot = { id: string; file: File | null; title: string; year: string }
+  const [showExtract, setShowExtract] = useState(false)
+  const [papers, setPapers] = useState<PaperSlot[]>([{ id: crypto.randomUUID(), file: null, title: '', year: '' }])
+  const [extracting, setExtracting]   = useState(false)
   const [extractProgress, setExtractProgress] = useState('')
   const [extractError, setExtractError] = useState('')
 
@@ -200,42 +199,42 @@ export default function QuestionsPage() {
     }).catch(() => setGenWhiteboards([]))
   }
 
+  const updatePaper = (id: string, patch: Partial<PaperSlot>) =>
+    setPapers(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p))
+  const addPaper = () =>
+    setPapers(ps => [...ps, { id: crypto.randomUUID(), file: null, title: '', year: '' }])
+  const removePaper = (id: string) =>
+    setPapers(ps => ps.filter(p => p.id !== id))
+
   const handleExtract = async () => {
-    if (!extractFiles.length || !userId || !selectedCourse) return
-    if (extractFiles.length === 1 && !extractTitle.trim()) return
+    const ready = papers.filter(p => p.file && p.title.trim())
+    if (!ready.length || !userId || !selectedCourse) return
     setExtracting(true); setExtractError(''); setExtractProgress('')
     const errors: string[] = []
-    for (let i = 0; i < extractFiles.length; i++) {
-      const file = extractFiles[i]
-      const title = extractFiles.length === 1
-        ? extractTitle.trim()
-        : file.name.replace(/\.pdf$/i, '')
-      setExtractProgress(extractFiles.length > 1 ? `Processing ${i + 1}/${extractFiles.length}: ${file.name}` : '')
+    for (let i = 0; i < ready.length; i++) {
+      const { file, title, year } = ready[i]
+      setExtractProgress(`Processing ${i + 1}/${ready.length}: ${file!.name}`)
       const form = new FormData()
-      form.append('file', file)
+      form.append('file', file!)
       form.append('user_id', userId)
       form.append('course_id', selectedCourse)
-      form.append('title', title)
-      form.append('source_label', extractYear.trim())
+      form.append('title', title.trim())
+      form.append('source_label', year.trim())
       try {
         const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/questions/extract`
-        console.log('[extract] POST', url, { file: file.name, title, course_id: selectedCourse })
         const res = await fetch(url, { method: 'POST', body: form })
-        console.log('[extract] response', res.status, res.statusText)
         if (!res.ok) {
           const err = await res.json().catch(() => ({ detail: res.statusText }))
-          console.error('[extract] error body', err)
-          errors.push(`${file.name}: ${err.detail || 'Extraction failed'}`)
+          errors.push(`${file!.name}: ${err.detail || 'Extraction failed'}`)
         }
       } catch (e: any) {
-        console.error('[extract] fetch threw', e)
-        errors.push(`${file.name}: ${e.message}`)
+        errors.push(`${file!.name}: ${e.message}`)
       }
     }
     setExtracting(false); setExtractProgress('')
     if (errors.length) { setExtractError(errors.join(' | ')); return }
     setShowExtract(false)
-    setExtractFiles([]); setExtractTitle(''); setExtractYear('')
+    setPapers([{ id: crypto.randomUUID(), file: null, title: '', year: '' }])
     loadTopics(selectedCourse, userId)
     if (showManage) loadBanks(selectedCourse, userId)
   }
@@ -312,40 +311,53 @@ export default function QuestionsPage() {
       {(showExtract || showGenerate) && (
         <div className="shrink-0 border-b px-6 py-4" style={{ borderColor: N.border, backgroundColor: N.bg }}>
           {showExtract && (
-            <div className="flex flex-wrap gap-3 items-end max-w-3xl">
-              <div>
-                <label className="block text-xs mb-1" style={{ color: N.muted }}>PDFs (select multiple)</label>
-                <input type="file" accept=".pdf" multiple
-                  onChange={e => setExtractFiles(Array.from(e.target.files || []))}
-                  className="text-sm" />
-                {extractFiles.length > 1 && (
-                  <p className="mt-1 text-xs" style={{ color: N.muted }}>{extractFiles.length} files selected — titles auto from filenames</p>
-                )}
+            <div className="max-w-2xl">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium" style={{ color: N.text }}>Past Papers</span>
+                <button onClick={() => setShowExtract(false)} className="text-xs" style={{ color: N.muted }}>✕</button>
               </div>
-              {extractFiles.length <= 1 && (
-                <div className="flex-1 min-w-40">
-                  <label className="block text-xs mb-1" style={{ color: N.muted }}>Title</label>
-                  <input value={extractTitle} onChange={e => setExtractTitle(e.target.value)}
-                    placeholder="e.g. 2025 Exam Paper"
-                    className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none"
-                    style={{ borderColor: N.border }} />
-                </div>
-              )}
-              <div className="w-28">
-                <label className="block text-xs mb-1" style={{ color: N.muted }}>Year (optional)</label>
-                <input value={extractYear} onChange={e => setExtractYear(e.target.value)}
-                  placeholder="2025"
-                  className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none"
-                  style={{ borderColor: N.border }} />
+              <div className="flex flex-col gap-2 mb-3">
+                {papers.map((p, i) => (
+                  <div key={p.id} className="flex items-center gap-2 rounded-lg border px-3 py-2.5"
+                    style={{ borderColor: N.border, backgroundColor: '#FAFAFA' }}>
+                    <span className="text-xs shrink-0" style={{ color: N.muted }}>#{i + 1}</span>
+                    <input type="file" accept=".pdf"
+                      onChange={e => {
+                        const f = e.target.files?.[0] || null
+                        updatePaper(p.id, { file: f, title: p.title || (f ? f.name.replace(/\.pdf$/i, '') : '') })
+                      }}
+                      className="text-xs shrink-0" style={{ width: 180 }} />
+                    <input value={p.title} onChange={e => updatePaper(p.id, { title: e.target.value })}
+                      placeholder="Title"
+                      className="flex-1 rounded border px-2 py-1 text-xs focus:outline-none"
+                      style={{ borderColor: N.border }} />
+                    <input value={p.year} onChange={e => updatePaper(p.id, { year: e.target.value })}
+                      placeholder="Year"
+                      className="w-16 rounded border px-2 py-1 text-xs focus:outline-none"
+                      style={{ borderColor: N.border }} />
+                    {papers.length > 1 && (
+                      <button onClick={() => removePaper(p.id)} className="text-xs shrink-0 transition hover:text-red-500"
+                        style={{ color: N.muted }}>✕</button>
+                    )}
+                  </div>
+                ))}
               </div>
-              <button onClick={handleExtract}
-                disabled={extracting || !extractFiles.length || (extractFiles.length === 1 && !extractTitle.trim())}
-                className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-                style={{ backgroundColor: N.indigo }}>
-                {extracting ? (extractProgress || 'Extracting…') : `Extract${extractFiles.length > 1 ? ` ${extractFiles.length} papers` : ''}`}
-              </button>
-              <button onClick={() => setShowExtract(false)} className="text-sm" style={{ color: N.muted }}>✕</button>
-              {extractError && <p className="w-full text-xs" style={{ color: N.red }}>{extractError}</p>}
+              <div className="flex items-center gap-3">
+                <button onClick={addPaper}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium transition hover:bg-[#EFEFED]"
+                  style={{ border: `1px solid ${N.border}`, color: N.muted }}>
+                  + Add paper
+                </button>
+                <button onClick={handleExtract}
+                  disabled={extracting || !papers.some(p => p.file && p.title.trim())}
+                  className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                  style={{ backgroundColor: N.indigo }}>
+                  {extracting
+                    ? extractProgress
+                    : `Generate Bank${papers.filter(p => p.file && p.title.trim()).length > 1 ? ` (${papers.filter(p => p.file && p.title.trim()).length} papers)` : ''}`}
+                </button>
+              </div>
+              {extractError && <p className="mt-2 text-xs" style={{ color: N.red }}>{extractError}</p>}
             </div>
           )}
 
