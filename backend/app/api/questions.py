@@ -139,12 +139,27 @@ Exam paper content:
         raise HTTPException(status_code=500, detail="Could not extract questions from this PDF")
 
     supabase = get_supabase_client()
+
+    # Upload PDF to Supabase Storage
+    pdf_url = None
+    try:
+        storage_path = f"{user_id}/{course_id}/{file.filename}"
+        supabase.storage.from_("past-papers").upload(
+            storage_path, content,
+            {"content-type": file.content_type or "application/pdf", "upsert": "true"}
+        )
+        pdf_url = supabase.storage.from_("past-papers").get_public_url(storage_path)
+    except Exception:
+        pass  # storage failure is non-fatal; questions still saved
+
     bank = supabase.table("question_banks").insert({
         "user_id": user_id,
         "course_id": course_id,
         "title": title,
         "source_type": "past_paper",
         "source_label": source_label or title,
+        "pdf_url": pdf_url,
+        "pdf_name": file.filename,
     }).execute()
 
     if not bank.data:

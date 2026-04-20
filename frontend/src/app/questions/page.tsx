@@ -128,10 +128,11 @@ export default function QuestionsPage() {
 
   // Upload form
   const [showExtract, setShowExtract]   = useState(false)
-  const [extractFile, setExtractFile]   = useState<File | null>(null)
+  const [extractFiles, setExtractFiles] = useState<File[]>([])
   const [extractTitle, setExtractTitle] = useState('')
   const [extractYear, setExtractYear]   = useState('')
   const [extracting, setExtracting]     = useState(false)
+  const [extractProgress, setExtractProgress] = useState('')
   const [extractError, setExtractError] = useState('')
 
   // Generate form
@@ -200,30 +201,38 @@ export default function QuestionsPage() {
   }
 
   const handleExtract = async () => {
-    if (!extractFile || !extractTitle.trim() || !userId || !selectedCourse) return
-    setExtracting(true); setExtractError('')
-    const form = new FormData()
-    form.append('file', extractFile)
-    form.append('user_id', userId)
-    form.append('course_id', selectedCourse)
-    form.append('title', extractTitle.trim())
-    form.append('source_label', extractYear.trim())
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/questions/extract`, { method: 'POST', body: form })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }))
-        throw new Error(err.detail || 'Extraction failed')
+    if (!extractFiles.length || !userId || !selectedCourse) return
+    if (extractFiles.length === 1 && !extractTitle.trim()) return
+    setExtracting(true); setExtractError(''); setExtractProgress('')
+    const errors: string[] = []
+    for (let i = 0; i < extractFiles.length; i++) {
+      const file = extractFiles[i]
+      const title = extractFiles.length === 1
+        ? extractTitle.trim()
+        : file.name.replace(/\.pdf$/i, '')
+      setExtractProgress(extractFiles.length > 1 ? `Processing ${i + 1}/${extractFiles.length}: ${file.name}` : '')
+      const form = new FormData()
+      form.append('file', file)
+      form.append('user_id', userId)
+      form.append('course_id', selectedCourse)
+      form.append('title', title)
+      form.append('source_label', extractYear.trim())
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/questions/extract`, { method: 'POST', body: form })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }))
+          errors.push(`${file.name}: ${err.detail || 'Extraction failed'}`)
+        }
+      } catch (e: any) {
+        errors.push(`${file.name}: ${e.message}`)
       }
-      setShowExtract(false)
-      setExtractFile(null); setExtractTitle(''); setExtractYear('')
-      // Reload topics and banks
-      loadTopics(selectedCourse, userId)
-      if (showManage) loadBanks(selectedCourse, userId)
-    } catch (e: any) {
-      setExtractError(e.message)
-    } finally {
-      setExtracting(false)
     }
+    setExtracting(false); setExtractProgress('')
+    if (errors.length) { setExtractError(errors.join(' | ')); return }
+    setShowExtract(false)
+    setExtractFiles([]); setExtractTitle(''); setExtractYear('')
+    loadTopics(selectedCourse, userId)
+    if (showManage) loadBanks(selectedCourse, userId)
   }
 
   const handleGenerate = async () => {
@@ -298,14 +307,25 @@ export default function QuestionsPage() {
       {(showExtract || showGenerate) && (
         <div className="shrink-0 border-b px-6 py-4" style={{ borderColor: N.border, backgroundColor: N.bg }}>
           {showExtract && (
-            <div className="flex flex-wrap gap-3 items-end max-w-2xl">
-              <div className="flex-1 min-w-40">
-                <label className="block text-xs mb-1" style={{ color: N.muted }}>Title</label>
-                <input value={extractTitle} onChange={e => setExtractTitle(e.target.value)}
-                  placeholder="e.g. 2025 Exam Paper"
-                  className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none"
-                  style={{ borderColor: N.border }} />
+            <div className="flex flex-wrap gap-3 items-end max-w-3xl">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: N.muted }}>PDFs (select multiple)</label>
+                <input type="file" accept=".pdf" multiple
+                  onChange={e => setExtractFiles(Array.from(e.target.files || []))}
+                  className="text-sm" />
+                {extractFiles.length > 1 && (
+                  <p className="mt-1 text-xs" style={{ color: N.muted }}>{extractFiles.length} files selected — titles auto from filenames</p>
+                )}
               </div>
+              {extractFiles.length <= 1 && (
+                <div className="flex-1 min-w-40">
+                  <label className="block text-xs mb-1" style={{ color: N.muted }}>Title</label>
+                  <input value={extractTitle} onChange={e => setExtractTitle(e.target.value)}
+                    placeholder="e.g. 2025 Exam Paper"
+                    className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none"
+                    style={{ borderColor: N.border }} />
+                </div>
+              )}
               <div className="w-28">
                 <label className="block text-xs mb-1" style={{ color: N.muted }}>Year (optional)</label>
                 <input value={extractYear} onChange={e => setExtractYear(e.target.value)}
@@ -313,14 +333,11 @@ export default function QuestionsPage() {
                   className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none"
                   style={{ borderColor: N.border }} />
               </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: N.muted }}>PDF</label>
-                <input type="file" accept=".pdf" onChange={e => setExtractFile(e.target.files?.[0] || null)} className="text-sm" />
-              </div>
-              <button onClick={handleExtract} disabled={extracting || !extractFile || !extractTitle.trim()}
+              <button onClick={handleExtract}
+                disabled={extracting || !extractFiles.length || (extractFiles.length === 1 && !extractTitle.trim())}
                 className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
                 style={{ backgroundColor: N.indigo }}>
-                {extracting ? 'Extracting…' : 'Extract'}
+                {extracting ? (extractProgress || 'Extracting…') : `Extract${extractFiles.length > 1 ? ` ${extractFiles.length} papers` : ''}`}
               </button>
               <button onClick={() => setShowExtract(false)} className="text-sm" style={{ color: N.muted }}>✕</button>
               {extractError && <p className="w-full text-xs" style={{ color: N.red }}>{extractError}</p>}
