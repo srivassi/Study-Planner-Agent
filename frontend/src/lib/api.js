@@ -67,6 +67,7 @@ export const api = {
   extractSections: (pdfUrl) => req('/whiteboard/extract-sections', { method: 'POST', body: JSON.stringify({ pdf_url: pdfUrl }) }),
 
   // ── Question Bank ─────────────────────────────────────────────
+  getQuestionTopics: (userId, courseId) => req(`/questions/topics?user_id=${userId}&course_id=${courseId}`),
   getQuestionBanks: (userId, courseId) => req(`/questions/banks?user_id=${userId}&course_id=${courseId}`),
   getQuestionBank: (bankId) => req(`/questions/banks/${bankId}`),
   deleteQuestionBank: (bankId) => req(`/questions/banks/${bankId}`, { method: 'DELETE' }),

@@ -302,6 +302,44 @@ def get_bank_questions(bank_id: str):
     return {"bank": bank.data[0], "topics": topics}
 
 
+# ─── Combined topic view (all banks for a course) ────────────
+
+@router.get("/topics")
+def get_topics_for_course(user_id: str = Query(...), course_id: str = Query(...)):
+    supabase = get_supabase_client()
+    banks = (
+        supabase.table("question_banks")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("course_id", course_id)
+        .execute()
+        .data or []
+    )
+    if not banks:
+        return {}
+
+    bank_ids = [b["id"] for b in banks]
+    questions = (
+        supabase.table("questions")
+        .select("*")
+        .in_("bank_id", bank_ids)
+        .order("topic")
+        .order("source_label")
+        .order("order_index")
+        .execute()
+        .data or []
+    )
+
+    topics: Dict[str, list] = {}
+    for q in questions:
+        t = q["topic"]
+        if t not in topics:
+            topics[t] = []
+        topics[t].append(q)
+
+    return topics
+
+
 # ─── Delete bank ─────────────────────────────────────────────
 
 @router.delete("/banks/{bank_id}")
