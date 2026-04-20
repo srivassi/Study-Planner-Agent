@@ -75,7 +75,7 @@ export const api = {
   gradeAnswer: (data) => req('/questions/grade', { method: 'POST', body: JSON.stringify(data) }),
 
   // ── Gauntlet ──────────────────────────────────────────────────
-  gauntletStart: (pdfUrl) => req('/tutor/start', { method: 'POST', body: JSON.stringify({ pdf_url: pdfUrl }) }),
+  gauntletStart: (pdfUrl, roomId) => req('/tutor/start', { method: 'POST', body: JSON.stringify({ pdf_url: pdfUrl, room_id: roomId || null }) }),
   gauntletChat: (data) => req('/tutor/chat', { method: 'POST', body: JSON.stringify(data) }),
   gauntletGetRooms: (userId, courseId) => req(`/tutor/rooms?user_id=${userId}${courseId ? `&course_id=${courseId}` : ''}`),
   gauntletUpsertRoom: (data) => req('/tutor/rooms', { method: 'POST', body: JSON.stringify(data) }),

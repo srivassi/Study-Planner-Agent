@@ -28,6 +28,7 @@ router = APIRouter(prefix="/tutor")
 class StartRequest(BaseModel):
     pdf_url: str
     pdf_name: Optional[str] = None
+    room_id: Optional[str] = None
 
 
 class TopicResult(BaseModel):
@@ -114,6 +115,15 @@ def _extract_json(raw: str) -> dict:
 
 @router.post("/start")
 def start_gauntlet(body: StartRequest):
+    supabase = get_supabase_client()
+
+    # Return cached topics if the room already has them
+    if body.room_id:
+        cached = supabase.table("gauntlet_rooms").select("topics, pdf_text").eq("id", body.room_id).execute()
+        if cached.data and cached.data[0].get("topics") and cached.data[0].get("pdf_text"):
+            row = cached.data[0]
+            return {"topics": row["topics"], "pdf_text": row["pdf_text"]}
+
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not set")
@@ -151,9 +161,7 @@ Aim for 4-8 topics. If the PDF is short, fewer is fine."""
         msg = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=2000,
-            messages=[
-                {"role": "user", "content": prompt},
-            ],
+            messages=[{"role": "user", "content": prompt}],
         )
         result = _extract_json(msg.content[0].text)
         topics = result.get("topics", [])
@@ -163,7 +171,16 @@ Aim for 4-8 topics. If the PDF is short, fewer is fine."""
     if not topics:
         raise HTTPException(status_code=500, detail="Could not extract topics from this PDF. The content may be too short or unclear.")
 
-    return {"topics": topics, "pdf_text": pdf_text[:40000]}
+    truncated_text = pdf_text[:40000]
+
+    # Cache topics and pdf_text in the room for future opens
+    if body.room_id:
+        supabase.table("gauntlet_rooms").update({
+            "topics": topics,
+            "pdf_text": truncated_text,
+        }).eq("id", body.room_id).execute()
+
+    return {"topics": topics, "pdf_text": truncated_text}
 
 
 # ─── Chat: Socratic tutoring turn ────────────────────────────
