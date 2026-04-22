@@ -22,6 +22,7 @@ type Course  = { id: string; name: string; color: string }
 type Bank    = { id: string; title: string; source_type: string; source_label: string | null; created_at: string; question_count: number }
 type Question = { id: string; bank_id: string; topic: string; question_text: string; model_answer: string; explanation: string; source_label: string | null }
 type GradeResult = { grade: string; score: number; feedback: string; what_was_good: string; what_to_improve: string }
+type AnswerEvent = { type: 'mcq'; correct: boolean } | { type: 'written'; score: number }
 
 const GRADE_STYLE: Record<string, { color: string; bg: string }> = {
   Excellent:    { color: N.green,    bg: N.greenBg },
@@ -47,7 +48,7 @@ function mcqCorrectLetter(modelAnswer: string) {
   return modelAnswer.trim().match(/^([A-D])\)/)?.[1] ?? ''
 }
 
-function QuestionCard({ q }: { q: Question }) {
+function QuestionCard({ q, onAnswered }: { q: Question; onAnswered?: (e: AnswerEvent) => void }) {
   const mcq          = parseMCQ(q.question_text)
   const correctLetter = mcq ? mcqCorrectLetter(q.model_answer) : ''
 
@@ -64,6 +65,7 @@ function QuestionCard({ q }: { q: Question }) {
     try {
       const result = await api.gradeAnswer({ question_text: q.question_text, user_answer: attempt, topic: q.topic })
       setGrade(result)
+      onAnswered?.({ type: 'written', score: result.score })
     } catch (e: any) {
       alert(e.message || 'Grading failed')
     } finally {
@@ -113,7 +115,7 @@ function QuestionCard({ q }: { q: Question }) {
         </div>
 
         {!mcqAnswered && (
-          <button onClick={() => setMcqAnswered(true)} disabled={!mcqPick}
+          <button onClick={() => { setMcqAnswered(true); onAnswered?.({ type: 'mcq', correct: mcqPick === correctLetter }) }} disabled={!mcqPick}
             className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
             style={{ backgroundColor: N.indigo }}>
             Check
@@ -225,6 +227,9 @@ export default function QuestionsPage() {
   const [extractProgress, setExtractProgress] = useState('')
   const [extractError, setExtractError] = useState('')
 
+  // Session score tracking
+  const [sessionScores, setSessionScores] = useState<Record<string, AnswerEvent>>({})
+
   // Generate form
   const [showGenerate, setShowGenerate]   = useState(false)
   const [genWhiteboards, setGenWhiteboards] = useState<any[]>([])
@@ -292,12 +297,17 @@ export default function QuestionsPage() {
     if (selectedCourse && userId) loadTopics(selectedCourse, userId)
   }
 
+  const handleAnswered = (qId: string, event: AnswerEvent) => {
+    setSessionScores(prev => prev[qId] ? prev : { ...prev, [qId]: event })
+  }
+
   const handleCourseChange = (courseId: string) => {
     setSelectedCourse(courseId)
     setShowManage(false)
     setShowExtract(false)
     setShowGenerate(false)
     setFilterBank(null)
+    setSessionScores({})
     if (courseId && userId) {
       loadTopics(courseId, userId)
     }
@@ -363,15 +373,63 @@ export default function QuestionsPage() {
     setGenFormat('mixed'); setGenCount(''); setGenInstructions(''); setGenSuccess(null); setGenError('')
   }
 
+  const buildScoreInstructions = (): string => {
+    if (scoreEntries.length === 0) return ''
+    const parts: string[] = []
+
+    // MCQ wrong topics
+    const wrongMcqIds = Object.entries(sessionScores)
+      .filter(([, e]) => e.type === 'mcq' && !(e as Extract<AnswerEvent, { type: 'mcq' }>).correct)
+      .map(([id]) => id)
+    const wrongTopics = [...new Set(wrongMcqIds.map(id => {
+      for (const qs of Object.values(topics)) {
+        const q = qs.find(q => q.id === id)
+        if (q) return q.topic
+      }
+      return null
+    }).filter(Boolean))]
+    if (wrongTopics.length) parts.push(`The user struggled with these topics (got MCQ wrong): ${wrongTopics.join(', ')}. Prioritise more questions on these.`)
+
+    // Written low scores
+    const lowWrittenIds = Object.entries(sessionScores)
+      .filter(([, e]) => e.type === 'written' && (e as Extract<AnswerEvent, { type: 'written' }>).score <= 2)
+      .map(([id]) => id)
+    const lowTopics = [...new Set(lowWrittenIds.map(id => {
+      for (const qs of Object.values(topics)) {
+        const q = qs.find(q => q.id === id)
+        if (q) return q.topic
+      }
+      return null
+    }).filter(Boolean))]
+    if (lowTopics.length) parts.push(`The user got low scores on written answers in: ${lowTopics.join(', ')}. Include more depth-testing questions on these.`)
+
+    // Topics not yet answered
+    const answeredTopics = new Set(Object.keys(sessionScores).map(id => {
+      for (const qs of Object.values(topics)) {
+        const q = qs.find(q => q.id === id)
+        if (q) return q.topic
+      }
+      return null
+    }).filter(Boolean))
+    const unansweredTopics = topicList.filter(t => !answeredTopics.has(t))
+    if (unansweredTopics.length && unansweredTopics.length < topicList.length) {
+      parts.push(`These topics have not been practised yet: ${unansweredTopics.join(', ')}. Make sure to include questions covering them.`)
+    }
+
+    return parts.join(' ')
+  }
+
   const handleGenerate = async () => {
     if (!genPdf || !genTitle.trim() || !userId || !selectedCourse) return
     setGenerating(true); setGenError(''); setGenSuccess(null)
     try {
+      const scoreHint = genSuccess !== null ? buildScoreInstructions() : ''
+      const combinedInstructions = [genInstructions.trim(), scoreHint].filter(Boolean).join(' ')
       const result = await api.generateQuestionBank({
         user_id: userId, course_id: selectedCourse, pdf_url: genPdf, pdf_name: genPdfName,
         title: genTitle.trim(), format: genFormat,
         num_questions: genCount ? parseInt(genCount) : undefined,
-        instructions: genInstructions.trim() || undefined,
+        instructions: combinedInstructions || undefined,
       })
       setGenSuccess(result.count)
       loadTopics(selectedCourse, userId)
@@ -394,6 +452,13 @@ export default function QuestionsPage() {
   const activeQs  = topics[activeTopic] || []
   const totalQs   = Object.values(topics).reduce((s, qs) => s + qs.length, 0)
   const hasTopics = topicList.length > 0
+
+  const scoreEntries   = Object.values(sessionScores)
+  const mcqEntries     = scoreEntries.filter(e => e.type === 'mcq') as Extract<AnswerEvent, { type: 'mcq' }>[]
+  const writtenEntries = scoreEntries.filter(e => e.type === 'written') as Extract<AnswerEvent, { type: 'written' }>[]
+  const mcqCorrect     = mcqEntries.filter(e => e.correct).length
+  const writtenAvg     = writtenEntries.length ? writtenEntries.reduce((s, e) => s + e.score, 0) / writtenEntries.length : 0
+  const SCORE_LABEL    = ['', 'Insufficient', 'Developing', 'Good', 'Excellent']
 
   return (
     <div className="flex h-screen flex-col" style={{ fontFamily: 'Inter, sans-serif', backgroundColor: N.sidebar, color: N.text }}>
@@ -636,8 +701,30 @@ export default function QuestionsPage() {
                 <span className="text-xs font-medium truncate" style={{ color: N.text }}>{filterBank.title}</span>
               </div>
             )}
+
+            {scoreEntries.length > 0 && (
+              <div className="flex items-center gap-3 flex-wrap rounded-xl border px-4 py-2.5 -mt-1"
+                style={{ borderColor: N.border, backgroundColor: N.bg }}>
+                <span className="text-xs font-semibold" style={{ color: N.text }}>
+                  {scoreEntries.length}/{totalQs} answered
+                </span>
+                {mcqEntries.length > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: mcqCorrect === mcqEntries.length ? N.greenBg : N.redBg, color: mcqCorrect === mcqEntries.length ? N.green : N.red }}>
+                    MCQ {mcqCorrect}/{mcqEntries.length} ✓
+                  </span>
+                )}
+                {writtenEntries.length > 0 && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: writtenAvg >= 3 ? N.greenBg : writtenAvg >= 2 ? N.amberBg : N.redBg, color: writtenAvg >= 3 ? N.green : writtenAvg >= 2 ? N.amber : N.red }}>
+                    Written avg: {SCORE_LABEL[Math.round(writtenAvg)] || 'Developing'}
+                  </span>
+                )}
+              </div>
+            )}
+
             <h2 className="text-base font-semibold" style={{ color: N.text }}>{activeTopic}</h2>
-            {activeQs.map(q => <QuestionCard key={q.id} q={q} />)}
+            {activeQs.map(q => <QuestionCard key={q.id} q={q} onAnswered={e => handleAnswered(q.id, e)} />)}
           </div>
         </div>
       )}
