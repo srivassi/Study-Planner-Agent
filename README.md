@@ -1,4 +1,4 @@
-# Study Planner Agent
+# FlowState
 
 An AI-powered study platform for university students. Turns lecture notes and past papers into a personalised, adaptive study experience — planning, practice, and games in one place.
 
