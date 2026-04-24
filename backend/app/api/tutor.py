@@ -130,8 +130,9 @@ def start_gauntlet(body: StartRequest):
             if cached.data and cached.data[0].get("topics") and cached.data[0].get("pdf_text"):
                 row = cached.data[0]
                 return {"topics": row["topics"], "pdf_text": row["pdf_text"]}
+            # Query succeeded but no cached data — fall through to extract
         except Exception:
-            pass
+            raise HTTPException(status_code=503, detail="Could not load session data, please try again.")
 
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
