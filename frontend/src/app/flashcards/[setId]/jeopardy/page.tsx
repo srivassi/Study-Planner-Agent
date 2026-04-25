@@ -38,8 +38,8 @@ type Board = {
 }
 
 function buildBoard(cards: Flashcard[]): Board {
-  // Take up to 9 cards, assign difficulty by thirds
-  const picked = cards.slice(0, 9)
+  const shuffled = [...cards].sort(() => Math.random() - 0.5)
+  const picked = shuffled.slice(0, 9)
   const easy = picked.slice(0, 3).map((c, i) => ({ ...c, points: 100, difficulty: 'easy' as const, answered: false }))
   const medium = picked.slice(3, 6).map((c, i) => ({ ...c, points: 300, difficulty: 'medium' as const, answered: false }))
   const hard = picked.slice(6, 9).map((c, i) => ({ ...c, points: 500, difficulty: 'hard' as const, answered: false }))
