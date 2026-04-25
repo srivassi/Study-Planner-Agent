@@ -59,7 +59,9 @@ export default function JeopardyPage() {
   const [setTitle, setSetTitle] = useState('')
   const [board, setBoard] = useState<Board | null>(null)
   const [score, setScore] = useState(0)
-  const [highScore, setHighScore] = useState(0)
+  const [highScore, setHighScore] = useState(() => {
+    try { return parseInt(localStorage.getItem(`jeopardy-hs-${setId}`) || '0', 10) } catch { return 0 }
+  })
   const [loading, setLoading] = useState(true)
 
   // Active question modal
@@ -93,7 +95,10 @@ export default function JeopardyPage() {
     if (!active) return
     const newScore = score + active.points
     setScore(newScore)
-    if (newScore > highScore) setHighScore(newScore)
+    if (newScore > highScore) {
+      setHighScore(newScore)
+      try { localStorage.setItem(`jeopardy-hs-${setId}`, String(newScore)) } catch {}
+    }
     closeCard(true)
   }
 
